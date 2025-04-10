@@ -3,9 +3,9 @@ package main
 type EncryptedMessage struct {
 	Ciphertext       string            `json:"ciphertext"`
 	Nonce            string            `json:"nonce"`
-	EncryptedKeys    map[string]string `json:"encrypted_keys"`
+	EncryptedKeys    map[string]string `json:"encryptedKeys"`
 	Signature        string            `json:"signature"`
-	SigningPublicKey string            `json:"signing_public_key"`
+	SigningPublicKey string            `json:"signingPublicKey"`
 	Sender           string            `json:"sender"`
 }
 

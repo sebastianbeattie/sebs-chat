@@ -176,7 +176,7 @@ func decrypt(jsonInput string, config Config) {
 		return
 	}
 
-	fmt.Println("Decrypted message:", string(plaintext))
+	fmt.Printf("%s: %s\n", msg.Sender, string(plaintext))
 }
 
 func main() {
