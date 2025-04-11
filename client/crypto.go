@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 
 	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/crypto/curve25519"
 )
 
 func encrypt(messageFile string, config Config) {
@@ -179,42 +179,65 @@ func decrypt(jsonInput string, config Config) {
 	fmt.Printf("%s: %s\n", msg.Sender, string(plaintext))
 }
 
-func main() {
-	configPath := flag.String("config", "config.json", "Path to the config file")
-	cmd := flag.String("cmd", "", "Command: create, encrypt, decrypt")
-	message := flag.String("input", "", "Path to JSON message to encrypt or decrypt")
-
-	flag.Parse()
-
-	if *cmd == "" {
-		fmt.Println("Please provide a command using -cmd flag")
-		return
-	}
-
-	var config Config
-
-	jsonFile, err := os.Open(*configPath)
+func generateX25519KeyPair() ([]byte, []byte, error) {
+	priv := make([]byte, 32)
+	_, err := rand.Read(priv)
 	if err != nil {
-		fmt.Println("Error opening config file:", err)
-		return
+		return nil, nil, err
 	}
-	defer jsonFile.Close()
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println("Error reading config file:", err)
-		return
-	}
-	json.Unmarshal(byteValue, &config)
+	pub, err := curve25519.X25519(priv, curve25519.Basepoint)
+	return priv, pub, err
+}
 
-	switch *cmd {
-	case "create":
-		createKeypair(config.SelfKeyConfig)
-		createSigningKeypair(config.SelfKeyConfig)
-	case "encrypt":
-		encrypt(*message, config)
-	case "decrypt":
-		decrypt(*message, config)
-	default:
-		fmt.Printf("Unsupported command '%s'\n", *cmd)
+func createSigningKeypair(selfKeyConfig SelfKeyConfig) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		fmt.Println("Error generating Ed25519 keypair:", err)
+		return
 	}
+	saveKeyToFile(selfKeyConfig.SigningPrivate, priv)
+	saveKeyToFile(selfKeyConfig.SigningPublic, pub)
+	fmt.Println("Ed25519 signing key pair saved")
+}
+
+func createKeypair(selfKeyConfig SelfKeyConfig) {
+	priv, pub, err := generateX25519KeyPair()
+	if err != nil {
+		fmt.Println("Error generating key pair:", err)
+		return
+	}
+	saveKeyToFile(selfKeyConfig.Private, priv)
+	saveKeyToFile(selfKeyConfig.Public, pub)
+	fmt.Println("X25519 key pair saved")
+}
+
+func deriveSharedKey(priv, pub []byte) ([]byte, error) {
+	return curve25519.X25519(priv, pub)
+}
+
+func encryptSymmetric(message, key []byte) (ciphertext, nonce []byte, err error) {
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	nonce = make([]byte, chacha20poly1305.NonceSizeX)
+	rand.Read(nonce)
+	ciphertext = aead.Seal(nil, nonce, message, nil)
+	return ciphertext, nonce, nil
+}
+
+func decryptSymmetric(ciphertext, key, nonce []byte) ([]byte, error) {
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, err
+	}
+	return aead.Open(nil, nonce, ciphertext, nil)
+}
+
+func signMessage(message []byte, privPath string) ([]byte, error) {
+	priv, err := loadKeyFromFile(privPath)
+	if err != nil {
+		return nil, err
+	}
+	return ed25519.Sign(priv, message), nil
 }
