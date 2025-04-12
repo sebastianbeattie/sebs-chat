@@ -151,8 +151,7 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				continue
 			}
 
-			displayMessage(decryptedMessage.RawText, decryptedMessage.Author)
-			fmt.Printf("Received message: %s\n", message)
+			displayMessage(decryptedMessage.Author, decryptedMessage.RawText)
 		}
 	}
 }

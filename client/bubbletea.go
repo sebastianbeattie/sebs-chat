@@ -25,32 +25,46 @@ type newMessage struct {
 }
 
 var (
-	group     Group
-	webSocket *websocket.Conn
-	config    Config
+	group            Group
+	webSocket        *websocket.Conn
+	config           Config
+	incomingMessages chan tea.Msg
 )
 
+// === UI Lifecycle ===
+
 func (m display) Init() tea.Cmd {
-	return nil
+	return waitForIncoming() // Begin listening for messages
 }
 
-func displayMessage(sender, message string) tea.Cmd {
+// === Command Utilities ===
+
+func waitForIncoming() tea.Cmd {
 	return func() tea.Msg {
-		return newMessage{sender, message}
+		return <-incomingMessages
 	}
 }
+
+// Called from the WebSocket goroutine
+func displayMessage(sender, message string) {
+	if incomingMessages != nil {
+		incomingMessages <- newMessage{sender, message}
+	}
+}
+
+// === Update Loop ===
 
 func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		if !m.ready {
 			m.width = msg.Width
 			m.height = msg.Height
 			m.viewport = viewport.New(m.width, m.height-2)
 
-			// Rebuild text input now that we know terminal width
 			ti := textinput.New()
 			ti.Placeholder = "Type a message..."
 			ti.Focus()
@@ -68,10 +82,10 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.TrimSpace(text) != "" {
 				err := sendMessage(webSocket, group, config, text)
 				if err != nil {
-					cmds = append(cmds, displayMessage("Error", err.Error()))
+					displayMessage("Error", err.Error())
 				} else {
 					m.input.Reset()
-					cmds = append(cmds, displayMessage("You", text))
+					displayMessage("You", text)
 				}
 			}
 		case tea.KeyEsc:
@@ -83,6 +97,7 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages = append(m.messages, formatted)
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
+		cmds = append(cmds, waitForIncoming()) // Keep listening
 	}
 
 	var cmd tea.Cmd
@@ -92,14 +107,20 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// === View ===
+
 func (m display) View() string {
 	return fmt.Sprintf("%s\n\n%s", m.viewport.View(), m.input.View())
 }
+
+// === Entrypoint ===
 
 func createUi(g Group, ws *websocket.Conn, c Config) error {
 	group = g
 	webSocket = ws
 	config = c
+
+	incomingMessages = make(chan tea.Msg, 100) // buffered to avoid blocking
 
 	ti := textinput.New()
 	ti.Placeholder = "Type a message..."
