@@ -11,6 +11,8 @@ import (
 	"github.com/fasthttp/websocket"
 )
 
+var warningsDisplayed = []string{}
+
 func websocketUrl(serverConfig ServerConfig, temporaryToken string) string {
 	url := "ws"
 	if serverConfig.UseTls {
@@ -81,9 +83,27 @@ func connectGroup(group string, config Config) error {
 }
 
 func sendMessage(ws *websocket.Conn, group Group, config Config, message string) error {
+	filteredRecipients := removeUserIdFromRecipientList(group.Members, config.UserID)
+	recipientsWithoutKeys := checkRecipientKeysExist(filteredRecipients, config)
+
+	for _, recipient := range recipientsWithoutKeys {
+		if !contains(warningsDisplayed, recipient) {
+			warningsDisplayed = append(warningsDisplayed, recipient)
+			displayWarning(fmt.Sprintf("Couldn't find the public key for %s - they will not receive your messages until this is resolved", recipient))
+		}
+	}
+
+	for _, recipient := range recipientsWithoutKeys {
+		filteredRecipients = removeUserIdFromRecipientList(filteredRecipients, recipient)
+	}
+
+	if len(filteredRecipients) == 0 {
+		return nil
+	}
+
 	inputMessage := InputMessage{
 		RawText:    message,
-		Recipients: removeUserIdFromRecipientList(group.Members, config.UserID),
+		Recipients: filteredRecipients,
 	}
 
 	encryptedMessage, err := encrypt(inputMessage, config)
@@ -151,7 +171,7 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				continue
 			}
 
-			displayMessage(decryptedMessage.Author, decryptedMessage.RawText)
+			displayMessage(decryptedMessage.Author, decryptedMessage.RawText, "#de8b04", "#ffffff")
 		}
 	}
 }
