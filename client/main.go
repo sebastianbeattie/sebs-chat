@@ -86,15 +86,39 @@ func main() {
 		}
 		fmt.Println("User registered successfully.")
 	case "create-group":
-		createMessageGroup(args.Input, config)
+		group, err := createMessageGroup(args.Input, config)
+		if err != nil {
+			fmt.Println("Error creating group:", err)
+			return
+		}
+		fmt.Println("Group created successfully!")
+		printGroupInfo(group)
 	case "group-info":
-		getGroupInfo(args.Group, config)
-	case "login":
-		loginGroup(args.Group, config)
-		return
+		group, err := getGroupInfo(args.Group, config)
+		if err != nil {
+			fmt.Println("Error getting group info:", err)
+			return
+		}
+		printGroupInfo(group)
+	case "connect":
+		err := connectGroup(args.Group, config)
+		if err != nil {
+			fmt.Println("Error connecting to group:", err)
+			return
+		}
 	case "list-groups":
-		getGroupsContainingMember(config)
-		return
+		groups, err := getGroupsContainingMember(config)
+		if err != nil {
+			fmt.Println("Error getting groups list:", err)
+			return
+		}
+		for _, group := range groups {
+			fmt.Println("----------------------")
+			printGroupInfo(group)
+		}
+		fmt.Println("----------------------")
+		fmt.Println("Total groups:", len(groups))
+		fmt.Println("----------------------")
 	case "leave-group":
 		return
 	case "delete-group":

@@ -22,11 +22,10 @@ func websocketUrl(serverConfig ServerConfig, temporaryToken string) string {
 	return url
 }
 
-func loginGroup(group string, config Config) {
+func connectGroup(group string, config Config) error {
 	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
 	if err != nil {
-		fmt.Println("Error reading auth token:", err)
-		return
+		return fmt.Errorf("error reading auth token: %v", err)
 	}
 	request := LoginRequest{
 		GroupName: group,
@@ -35,17 +34,15 @@ func loginGroup(group string, config Config) {
 
 	loginResponse, err := login(config, request)
 	if err != nil {
-		fmt.Println("Error logging in to group:", err)
-		return
+		return fmt.Errorf("error connecting to group: %v", err)
 	}
-	fmt.Printf("Created login request for group %s\n", group)
-	fmt.Printf("Connect token: %s\n", loginResponse.ConnectToken)
+
+	fmt.Printf("Created connect request for group %s\n", group)
 
 	websocketUrl := websocketUrl(config.ServerConfig, loginResponse.ConnectToken)
 	ws, err := connectToWebSocket(websocketUrl)
 	if err != nil {
-		fmt.Println("Error connecting to websocket:", err)
-		return
+		return fmt.Errorf("error connecting to websocket: %v", err)
 	}
 	defer ws.Close()
 	fmt.Println("Connected to websocket server")

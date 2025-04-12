@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 )
 
@@ -15,40 +12,29 @@ func printGroupInfo(group Group) {
 	fmt.Printf("Owner: %s\n", group.Owner)
 }
 
-func createMessageGroup(inputFile string, config Config) {
+func createMessageGroup(inputFile string, config Config) (Group, error) {
 	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
 	if err != nil {
-		fmt.Println("Error reading auth token:", err)
-		return
+		return Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}
-	jsonFile, err := os.Open(inputFile)
+
+	request, err := readJson[CreateGroupRequest](inputFile)
 	if err != nil {
-		fmt.Println("Error opening JSON file:", err)
-		return
+		return Group{}, fmt.Errorf("error reading input file: %v", err)
 	}
-	defer jsonFile.Close()
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println("Error reading JSON file:", err)
-		return
-	}
-	var request CreateGroupRequest
-	json.Unmarshal(byteValue, &request)
 	request.AuthToken = authToken
 
 	response, err := createGroup(config, request)
 	if err != nil {
-		fmt.Println("Error creating group:", err)
-		return
+		return Group{}, fmt.Errorf("error creating group: %v", err)
 	}
-	printGroupInfo(response)
+	return response, nil
 }
 
-func getGroupInfo(groupName string, config Config) {
+func getGroupInfo(groupName string, config Config) (Group, error) {
 	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
 	if err != nil {
-		fmt.Println("Error reading auth token:", err)
-		return
+		return Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}
 	request := GetGroupRequest{
 		GroupName: groupName,
@@ -57,17 +43,15 @@ func getGroupInfo(groupName string, config Config) {
 
 	group, err := getGroup(config, request)
 	if err != nil {
-		fmt.Println("Error getting group info:", err)
-		return
+		return Group{}, fmt.Errorf("error getting group info: %v", err)
 	}
-	printGroupInfo(group)
+	return group, nil
 }
 
-func getGroupsContainingMember(config Config) {
+func getGroupsContainingMember(config Config) ([]Group, error) {
 	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
 	if err != nil {
-		fmt.Println("Error reading auth token:", err)
-		return
+		return []Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}
 	request := GetGroupMembershipsRequest{
 		AuthToken: authToken,
@@ -75,14 +59,8 @@ func getGroupsContainingMember(config Config) {
 
 	groups, err := getGroups(config, request)
 	if err != nil {
-		fmt.Println("Error getting groups:", err)
-		return
+		return []Group{}, fmt.Errorf("error getting groups: %v", err)
 	}
-	for _, group := range groups.Groups {
-		fmt.Println("----------------------")
-		printGroupInfo(group)
-	}
-	fmt.Println("----------------------")
-	fmt.Println("Total groups:", len(groups.Groups))
-	fmt.Println("----------------------")
+
+	return groups.Groups, nil
 }
