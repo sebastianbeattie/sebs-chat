@@ -4,4 +4,8 @@ Optionally *Seb's Send Stuff Safely, Simply, System* or SSSSSS 🐍
 
 ## What's in here?
 
-Seb's Chat consists of 2 parts, a client and an optional server. The server is intended for key sharing and message passing, but PeerJS will also be an option
+The client and an optional server. 
+
+The client is capable of encrypting and decrypting single JSON messages via the command line, so the server is not needed.
+
+The server allows you to create messaging "groups" which pass messages between users. Key exchange will be added eventually.
