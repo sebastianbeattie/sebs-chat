@@ -33,14 +33,49 @@ func main() {
 	}
 
 	switch args.Command {
-	case "create":
+	case "keygen":
 		fmt.Println("Generating keys...")
-		createKeypair(config.SelfKeyConfig)
-		createSigningKeypair(config.SelfKeyConfig)
+		err := createKeypair(config.SelfKeyConfig)
+		if err != nil {
+			fmt.Println("Error generating key pair:", err)
+			return
+		}
+		fmt.Println("X25519 key pair saved")
+		err = createSigningKeypair(config.SelfKeyConfig)
+		if err != nil {
+			fmt.Println("Error generating signing key pair:", err)
+			return
+		}
+		fmt.Println("Ed25519 signing key pair saved")
 	case "encrypt":
-		encrypt(args.Input, config)
+		inputMessage, err := readJson[InputMessage](args.Input)
+		if err != nil {
+			fmt.Println("Error reading input message:", err)
+			return
+		}
+		encryptedMessage, err := encrypt(inputMessage, config)
+		if err != nil {
+			fmt.Println("Error encrypting message:", err)
+			return
+		}
+		encryptedMessageBytes, err := json.MarshalIndent(encryptedMessage, "", "   ")
+		if err != nil {
+			fmt.Println("Error marshalling encrypted message:", err)
+			return
+		}
+		fmt.Println(string(encryptedMessageBytes))
 	case "decrypt":
-		decrypt(args.Input, config)
+		encryptedMessage, err := readJson[EncryptedMessage](args.Input)
+		if err != nil {
+			fmt.Println("Error reading input message:", err)
+			return
+		}
+		decryptedMessage, err := decrypt(encryptedMessage, config)
+		if err != nil {
+			fmt.Println("Error decrypting message:", err)
+			return
+		}
+		fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
 	case "register":
 		fmt.Println("Registering user...")
 		request := CreateUserRequest{Username: config.UserID}

@@ -4,35 +4,16 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
 
-func encrypt(messageFile string, config Config) {
-	var inputMessage InputMessage
-
-	jsonFile, err := os.Open(messageFile)
-	if err != nil {
-		fmt.Println("Error opening JSON file:", err)
-		return
-	}
-	defer jsonFile.Close()
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println("Error reading JSON file:", err)
-		return
-	}
-	json.Unmarshal(byteValue, &inputMessage)
-
+func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error) {
 	senderPriv, err := loadKeyFromFile(config.SelfKeyConfig.Private)
 	if err != nil {
-		fmt.Println("Error loading sender private key:", err)
-		return
+		return EncryptedMessage{}, fmt.Errorf("error loading sender private key: %v", err)
 	}
 
 	symKey := make([]byte, 32)
@@ -40,8 +21,7 @@ func encrypt(messageFile string, config Config) {
 
 	ciphertext, nonce, err := encryptSymmetric([]byte(inputMessage.RawText), symKey)
 	if err != nil {
-		fmt.Println("Error encrypting message:", err)
-		return
+		return EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
 	}
 
 	encryptedKeys := make(map[string]string)
@@ -49,32 +29,27 @@ func encrypt(messageFile string, config Config) {
 		pubPath := getUserPublicKey(config.ExternalKeysDir, user)
 		pub, err := loadKeyFromFile(pubPath)
 		if err != nil {
-			fmt.Println("Error loading recipient public key:", err)
-			return
+			return EncryptedMessage{}, fmt.Errorf("error loading recipient public key: %v", err)
 		}
 		sharedKey, err := deriveSharedKey(senderPriv, pub)
 		if err != nil {
-			fmt.Println("Error deriving shared key:", err)
-			return
+			return EncryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
 		}
 		encKey, encNonce, err := encryptSymmetric(symKey, sharedKey)
 		if err != nil {
-			fmt.Println("Error encrypting symmetric key:", err)
-			return
+			return EncryptedMessage{}, fmt.Errorf("error encrypting symmetric key: %v", err)
 		}
 		encryptedKeys[user] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
 	}
 
 	sig, err := signMessage(ciphertext, config.SelfKeyConfig.SigningPrivate)
 	if err != nil {
-		fmt.Println("Error signing message:", err)
-		return
+		return EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
 	}
 
 	signingPub, err := loadKeyFromFile(config.SelfKeyConfig.SigningPublic)
 	if err != nil {
-		fmt.Println("Error loading signing public key:", err)
-		return
+		return EncryptedMessage{}, fmt.Errorf("error loading signing public key: %v", err)
 	}
 
 	outputMsg := EncryptedMessage{
@@ -85,98 +60,73 @@ func encrypt(messageFile string, config Config) {
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
 		Sender:           config.UserID,
 	}
-	jsonData, err := json.MarshalIndent(outputMsg, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
-		return
-	}
-	fmt.Println(string(jsonData))
+	return outputMsg, nil
 }
 
-func decrypt(jsonInput string, config Config) {
-	var msg EncryptedMessage
-	jsonFile, err := os.Open(jsonInput)
-	if err != nil {
-		fmt.Println("Error opening JSON file:", err)
-		return
-	}
-	defer jsonFile.Close()
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println("Error reading JSON file:", err)
-		return
-	}
-	json.Unmarshal(byteValue, &msg)
-
+func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 	priv, err := loadKeyFromFile(config.SelfKeyConfig.Private)
 	if err != nil {
-		fmt.Println("Error loading private key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error loading private key: %v", err)
 	}
 
 	senderPubPath := getUserPublicKey(config.ExternalKeysDir, msg.Sender)
 	senderPub, err := loadKeyFromFile(senderPubPath)
 	if err != nil {
-		fmt.Println("Error loading sender public key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error loading sender public key: %v", err)
 	}
 
 	sharedKey, err := deriveSharedKey(priv, senderPub)
 	if err != nil {
-		fmt.Println("Error deriving shared key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
 	}
 
 	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[config.UserID])
 	if err != nil {
-		fmt.Println("Error decoding encrypted key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decoding encrypted key: %v", err)
 	}
 	encNonce := encKeyFull[:chacha20poly1305.NonceSizeX]
 	encKey := encKeyFull[chacha20poly1305.NonceSizeX:]
 
 	symKey, err := decryptSymmetric(encKey, sharedKey, encNonce)
 	if err != nil {
-		fmt.Println("Error decrypting symmetric key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decrypting symmetric key: %v", err)
 	}
 
 	nonce, err := base64.StdEncoding.DecodeString(msg.Nonce)
 	if err != nil {
-		fmt.Println("Error decoding nonce:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
 	}
 
 	ciphertext, err := base64.StdEncoding.DecodeString(msg.Ciphertext)
 	if err != nil {
-		fmt.Println("Error decoding ciphertext:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decoding ciphertext: %v", err)
 	}
 
 	sig, err := base64.StdEncoding.DecodeString(msg.Signature)
 	if err != nil {
-		fmt.Println("Error decoding signature:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
 	}
 
 	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
 	if err != nil {
-		fmt.Println("Error decoding signing public key:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
 	}
 
 	if !ed25519.Verify(signingPub, ciphertext, sig) {
-		fmt.Println("Signature verification failed!")
-		return
+		return DecryptedMessage{}, fmt.Errorf("signature verification failed")
 	}
 
 	plaintext, err := decryptSymmetric(ciphertext, symKey, nonce)
 	if err != nil {
-		fmt.Println("Error decrypting message:", err)
-		return
+		return DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
 	}
 
-	fmt.Printf("%s: %s\n", msg.Sender, string(plaintext))
+	decryptedMessage := DecryptedMessage{
+		RawText: string(plaintext),
+		Author:  msg.Sender,
+	}
+
+	return decryptedMessage, nil
 }
 
 func generateX25519KeyPair() ([]byte, []byte, error) {
@@ -189,26 +139,36 @@ func generateX25519KeyPair() ([]byte, []byte, error) {
 	return priv, pub, err
 }
 
-func createSigningKeypair(selfKeyConfig SelfKeyConfig) {
+func createSigningKeypair(selfKeyConfig SelfKeyConfig) error {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		fmt.Println("Error generating Ed25519 keypair:", err)
-		return
+		return fmt.Errorf("error generating Ed25519 keypair: %v", err)
 	}
-	saveKeyToFile(selfKeyConfig.SigningPrivate, priv)
-	saveKeyToFile(selfKeyConfig.SigningPublic, pub)
-	fmt.Println("Ed25519 signing key pair saved")
+	err = saveKeyToFile(selfKeyConfig.SigningPrivate, priv)
+	if err != nil {
+		return err
+	}
+	err = saveKeyToFile(selfKeyConfig.SigningPublic, pub)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func createKeypair(selfKeyConfig SelfKeyConfig) {
+func createKeypair(selfKeyConfig SelfKeyConfig) error {
 	priv, pub, err := generateX25519KeyPair()
 	if err != nil {
-		fmt.Println("Error generating key pair:", err)
-		return
+		return fmt.Errorf("error generating key pair: %v", err)
 	}
-	saveKeyToFile(selfKeyConfig.Private, priv)
-	saveKeyToFile(selfKeyConfig.Public, pub)
-	fmt.Println("X25519 key pair saved")
+	err = saveKeyToFile(selfKeyConfig.Private, priv)
+	if err != nil {
+		return err
+	}
+	err = saveKeyToFile(selfKeyConfig.Public, pub)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func deriveSharedKey(priv, pub []byte) ([]byte, error) {

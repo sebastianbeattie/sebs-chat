@@ -82,3 +82,8 @@ type LoginRequest struct {
 type LoginResponse struct {
 	ConnectToken string `json:"connectToken"`
 }
+
+type DecryptedMessage struct {
+	RawText string `json:"rawText"`
+	Author  string `json:"author"`
+}

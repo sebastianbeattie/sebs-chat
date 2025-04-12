@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -27,4 +29,25 @@ func readTextFromFile(filename string) (string, error) {
 		return "", err
 	}
 	return string(fileContents), nil
+}
+
+func readJson[T any](path string) (T, error) {
+	var result T
+
+	file, err := os.Open(path)
+	if err != nil {
+		return result, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return result, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		return result, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return result, nil
 }
