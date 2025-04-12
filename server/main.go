@@ -24,6 +24,23 @@ func main() {
 	})
 
 	// WebSocket endpoint
+
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		token := c.Query("token")
+		if token == "" {
+			return c.Status(401).SendString("Missing connection token")
+		}
+
+		valid := validateConnectionToken(token)
+		if !valid {
+			return c.Status(401).SendString("Invalid connection token")
+		}
+
+		if websocket.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
 	app.Get("/ws", websocket.New(websocketHandler))
 
 	// User endpoints

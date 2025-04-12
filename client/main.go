@@ -91,7 +91,7 @@ func main() {
 			fmt.Println("Error creating group:", err)
 			return
 		}
-		fmt.Println("Group created successfully!")
+		fmt.Printf("Created group '%s' successfully!\n", group.GroupName)
 		printGroupInfo(group)
 	case "group-info":
 		group, err := getGroupInfo(args.Group, config)

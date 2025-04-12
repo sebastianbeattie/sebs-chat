@@ -53,8 +53,6 @@ func createGroup(config Config, request CreateGroupRequest) (Group, error) {
 		return Group{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	fmt.Printf("Created group '%s' successfully!\n", request.GroupName)
-
 	var response Group
 	err = json.Unmarshal(body, &response)
 	if err != nil {

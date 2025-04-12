@@ -1,7 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	"github.com/fasthttp/websocket"
 )
@@ -44,38 +51,72 @@ func connectGroup(group string, config Config) error {
 	if err != nil {
 		return fmt.Errorf("error connecting to websocket: %v", err)
 	}
-	defer ws.Close()
+
 	fmt.Println("Connected to websocket server")
 
-	go listenForMessages(ws)
-	go sendMessages(ws)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Keep the main function running
-	select {}
+	go listenForMessages(ctx, ws)
+	go sendMessages(ctx, ws)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+	cancel()
+
+	fmt.Println("\nDisconnecting from group...")
+
+	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err != nil {
+		fmt.Println("Error sending close message:", err)
+	}
+
+	if err := ws.Close(); err != nil {
+		fmt.Printf("Error closing WebSocket: %v\n", err)
+	} else {
+		fmt.Println("WebSocket closed cleanly.")
+	}
+
+	return nil
 }
 
-func sendMessages(ws *websocket.Conn) {
+func sendMessages(ctx context.Context, ws *websocket.Conn) {
 	for {
-		var message string
-		fmt.Print("> ")
-		fmt.Scanln(&message)
-
-		err := ws.WriteMessage(websocket.TextMessage, []byte(message))
-		if err != nil {
-			fmt.Println("Error sending message:", err)
+		select {
+		case <-ctx.Done():
 			return
+		default:
+			var message string
+			fmt.Print("> ")
+			fmt.Scanln(&message)
+
+			err := ws.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				fmt.Println("Error sending message:", err)
+				return
+			}
 		}
 	}
 }
 
-func listenForMessages(ws *websocket.Conn) {
+func listenForMessages(ctx context.Context, ws *websocket.Conn) {
 	for {
-		_, message, err := ws.ReadMessage()
-		if err != nil {
-			fmt.Println("Error reading message:", err)
+		select {
+		case <-ctx.Done():
 			return
+		default:
+			_, message, err := ws.ReadMessage()
+			if err != nil {
+				if isClosedConnError(err) {
+					fmt.Println("Connection closed.")
+				} else {
+					fmt.Println("Error reading message:", err)
+				}
+				return
+			}
+			fmt.Printf("Received message: %s\n", message)
 		}
-		fmt.Printf("Received message: %s\n", message)
 	}
 }
 
@@ -86,4 +127,17 @@ func connectToWebSocket(url string) (*websocket.Conn, error) {
 		return nil, fmt.Errorf("failed to connect to websocket: %w", err)
 	}
 	return conn, nil
+}
+
+func isClosedConnError(err error) bool {
+	if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+		return true
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		if strings.Contains(netErr.Err.Error(), "use of closed network connection") {
+			return true
+		}
+	}
+	return false
 }

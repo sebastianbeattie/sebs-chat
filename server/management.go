@@ -61,6 +61,18 @@ func getConnectionMetadata(token string) (*ConnectionMetadata, error) {
 	return &ConnectionMetadata{}, errors.New("invalid connection token")
 }
 
+func validateConnectionToken(token string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for _, req := range connectionRequests {
+		if req.ConnectToken == token {
+			return true
+		}
+	}
+	return false
+}
+
 func removeConnectionRequest(token string) {
 	for i, req := range connectionRequests {
 		if req.ConnectToken == token {
