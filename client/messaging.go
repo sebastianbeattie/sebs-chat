@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/fasthttp/websocket"
 )
@@ -56,15 +54,22 @@ func connectGroup(group string, config Config) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	defer disconnectWebSocket(ws)
 
-	go listenForMessages(ctx, ws)
-	go sendMessages(ctx, ws)
+	groupInfo, err := getGroupInfo(group, config)
+	if err != nil {
+		return fmt.Errorf("error getting group info: %v", err)
+	}
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
+	// Runs the UI. If the user exits or the UI closes, disconnect
+	go listenForMessages(ctx, cancel, ws, config)
+	err = createUi(groupInfo, ws, config)
+	if err != nil {
+		return fmt.Errorf("error with UI: %v", err)
+	}
+
+	// Stop the listener goroutine
 	cancel()
-
 	fmt.Println("\nDisconnecting from group...")
 
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
@@ -72,35 +77,48 @@ func connectGroup(group string, config Config) error {
 		fmt.Println("Error sending close message:", err)
 	}
 
-	if err := ws.Close(); err != nil {
-		fmt.Printf("Error closing WebSocket: %v\n", err)
-	} else {
-		fmt.Println("WebSocket closed cleanly.")
+	return nil
+}
+
+func sendMessage(ws *websocket.Conn, group Group, config Config, message string) error {
+	inputMessage := InputMessage{
+		RawText:    message,
+		Recipients: removeUserIdFromRecipientList(group.Members, config.UserID),
+	}
+
+	encryptedMessage, err := encrypt(inputMessage, config)
+	if err != nil {
+		return fmt.Errorf("error encrypting message: %v", err)
+	}
+
+	outgoingMessage := MessageContainer{
+		GroupName: group.GroupName,
+		Message:   encryptedMessage,
+	}
+
+	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
+	if err != nil {
+		return fmt.Errorf("error marshalling outgoing message: %v", err)
+	}
+
+	err = ws.WriteMessage(websocket.TextMessage, outgoingMessageBytes)
+	if err != nil {
+		return fmt.Errorf("error sending message: %v", err)
 	}
 
 	return nil
 }
 
-func sendMessages(ctx context.Context, ws *websocket.Conn) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			var message string
-			fmt.Print("> ")
-			fmt.Scanln(&message)
-
-			err := ws.WriteMessage(websocket.TextMessage, []byte(message))
-			if err != nil {
-				fmt.Println("Error sending message:", err)
-				return
-			}
+func removeUserIdFromRecipientList(recipients []string, userId string) []string {
+	for i, recipient := range recipients {
+		if recipient == userId {
+			return append(recipients[:i], recipients[i+1:]...)
 		}
 	}
+	return recipients
 }
 
-func listenForMessages(ctx context.Context, ws *websocket.Conn) {
+func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn, config Config) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -109,12 +127,31 @@ func listenForMessages(ctx context.Context, ws *websocket.Conn) {
 			_, message, err := ws.ReadMessage()
 			if err != nil {
 				if isClosedConnError(err) {
-					fmt.Println("Connection closed.")
+					fmt.Println("WebSocket connection closing...")
 				} else {
-					fmt.Println("Error reading message:", err)
+					fmt.Println("Error reading from WebSocket:", err)
 				}
+				cancel() // Trigger shutdown
 				return
 			}
+
+			var incomingMessage MessageContainer
+			if err := json.Unmarshal(message, &incomingMessage); err != nil {
+				fmt.Printf("Malformed message: %s\nError: %v\n", string(message), err)
+				continue
+			}
+
+			if incomingMessage.Message.Sender == config.UserID {
+				continue
+			}
+
+			decryptedMessage, err := decrypt(incomingMessage.Message, config)
+			if err != nil {
+				fmt.Println("Error decrypting message:", err)
+				continue
+			}
+
+			displayMessage(decryptedMessage.RawText, decryptedMessage.Author)
 			fmt.Printf("Received message: %s\n", message)
 		}
 	}
@@ -140,4 +177,13 @@ func isClosedConnError(err error) bool {
 		}
 	}
 	return false
+}
+
+func disconnectWebSocket(ws *websocket.Conn) {
+	_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err := ws.Close(); err != nil {
+		fmt.Printf("Error closing WebSocket: %v\n", err)
+	} else {
+		fmt.Println("WebSocket closed cleanly.")
+	}
 }

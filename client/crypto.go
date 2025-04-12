@@ -64,6 +64,10 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 }
 
 func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
+	if msg.Sender == config.UserID {
+		return DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
+	}
+
 	priv, err := loadKeyFromFile(config.SelfKeyConfig.Private)
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading private key: %v", err)

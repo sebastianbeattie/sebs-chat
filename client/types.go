@@ -87,3 +87,8 @@ type DecryptedMessage struct {
 	RawText string `json:"rawText"`
 	Author  string `json:"author"`
 }
+
+type MessageContainer struct {
+	GroupName string           `json:"groupName"`
+	Message   EncryptedMessage `json:"message"`
+}

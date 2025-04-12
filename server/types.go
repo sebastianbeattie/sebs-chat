@@ -75,3 +75,17 @@ type ConnectionMetadata struct {
 	Connection   *websocket.Conn
 	ConnectToken string
 }
+
+type MessageContainer struct {
+	GroupName string           `json:"groupName"`
+	Message   EncryptedMessage `json:"message"`
+}
+
+type EncryptedMessage struct {
+	Ciphertext       string            `json:"ciphertext"`
+	Nonce            string            `json:"nonce"`
+	EncryptedKeys    map[string]string `json:"encryptedKeys"`
+	Signature        string            `json:"signature"`
+	SigningPublicKey string            `json:"signingPublicKey"`
+	Sender           string            `json:"sender"`
+}

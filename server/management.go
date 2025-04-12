@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -82,27 +81,15 @@ func removeConnectionRequest(token string) {
 	}
 }
 
-func monitorConnectionRequests() {
-	for {
-		time.Sleep(1 * time.Second)
-		mu.Lock()
-		now := time.Now().Unix()
-		filteredRequests := connectionRequests[:0]
-		for _, req := range connectionRequests {
-			if now-req.CreationTime <= 30 {
-				filteredRequests = append(filteredRequests, req)
-			}
-		}
-		connectionRequests = filteredRequests
-		mu.Unlock()
+func getRecipients(groupName string) []*ConnectionMetadata {
+	mu.Lock()
+	defer mu.Unlock()
 
-		if len(connectionRequests) > 0 || len(connections) > 0 {
-			fmt.Println("Active connection requests:", len(connectionRequests))
-			fmt.Println("Active connections:", len(connections))
+	var recipients []*ConnectionMetadata
+	for _, conn := range connections {
+		if conn.GroupName == groupName {
+			recipients = append(recipients, conn)
 		}
 	}
-}
-
-func init() {
-	go monitorConnectionRequests()
+	return recipients
 }
