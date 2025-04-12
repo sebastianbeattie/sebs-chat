@@ -1,4 +1,2 @@
-*.json
-keys
-private
-sebs-chat
+.vscode
+.DS_Store
