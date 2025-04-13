@@ -11,9 +11,9 @@ import (
 	"github.com/fasthttp/websocket"
 )
 
-var warningsDisplayed = []string{}
+var warningsDisplayed []string
 
-func websocketUrl(serverConfig ServerConfig, temporaryToken string) string {
+func createWebsocketUrl(serverConfig ServerConfig, temporaryToken string) string {
 	url := "ws"
 	if serverConfig.UseTls {
 		url = "wss"
@@ -46,7 +46,7 @@ func connectGroup(group string, config Config) error {
 
 	fmt.Printf("Created connect request for group %s\n", group)
 
-	websocketUrl := websocketUrl(config.ServerConfig, loginResponse.ConnectToken)
+	websocketUrl := createWebsocketUrl(config.ServerConfig, loginResponse.ConnectToken)
 	ws, err := connectToWebSocket(websocketUrl)
 	if err != nil {
 		return fmt.Errorf("error connecting to websocket: %v", err)
@@ -111,7 +111,7 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 		return fmt.Errorf("error encrypting message: %v", err)
 	}
 
-	outgoingMessage := MessageContainer{
+	outgoingMessage := EncryptedMessageContainer{
 		GroupName: group.GroupName,
 		Message:   encryptedMessage,
 	}
@@ -155,8 +155,8 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				return
 			}
 
-			var incomingMessage MessageContainer
-			if err := json.Unmarshal(message, &incomingMessage); err != nil {
+			var incomingMessage EncryptedMessageContainer
+			if err = json.Unmarshal(message, &incomingMessage); err != nil {
 				fmt.Printf("Malformed message: %s\nError: %v\n", string(message), err)
 				continue
 			}

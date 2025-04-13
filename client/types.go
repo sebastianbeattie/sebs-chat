@@ -88,7 +88,12 @@ type DecryptedMessage struct {
 	Author  string `json:"author"`
 }
 
-type MessageContainer struct {
+type EncryptedMessageContainer struct {
 	GroupName string           `json:"groupName"`
 	Message   EncryptedMessage `json:"message"`
+}
+
+type MessageContainer struct {
+	MessageType string `json:"type"`
+	Message     any    `json:"message"`
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func checkRecipientKeysExist(recipients []string, config Config) []string {
-	missing := []string{}
+	var missing []string
 	for _, recipient := range recipients {
 		if !keyExists(recipient, config) {
 			missing = append(missing, recipient)
