@@ -98,7 +98,7 @@ func createUser(config Config, request CreateUserRequest) error {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	err = saveTextToFile(config.SelfKeyConfig.AuthToken, response.AuthToken)
+	err = saveTextToFile(fmt.Sprintf("%s/auth_token", config.Keys.PrivateKeys), response.AuthToken)
 	if err != nil {
 		return fmt.Errorf("failed to save auth token: %w", err)
 	}

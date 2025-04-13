@@ -19,6 +19,10 @@ func getUserPublicKey(externalKeysDir, userID string) string {
 	return fmt.Sprintf("%s/%s/public.key", externalKeysDir, userID)
 }
 
+func getAuthToken(config Config) (string, error) {
+	return readTextFromFile(config.Keys.PrivateKeys + "/auth_token")
+}
+
 func saveTextToFile(filename string, text string) error {
 	return os.WriteFile(filename, []byte(text), 0600)
 }

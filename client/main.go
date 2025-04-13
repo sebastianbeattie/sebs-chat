@@ -44,13 +44,13 @@ func main() {
 	switch args.Command {
 	case "keygen":
 		fmt.Println("Generating keys...")
-		err = createKeypair(config.SelfKeyConfig)
+		err = createKeypair(config.Keys.PrivateKeys)
 		if err != nil {
 			fmt.Println("Error generating key pair:", err)
 			return
 		}
 		fmt.Println("X25519 key pair saved")
-		err = createSigningKeypair(config.SelfKeyConfig)
+		err = createSigningKeypair(config.Keys.PrivateKeys)
 		if err != nil {
 			fmt.Println("Error generating signing key pair:", err)
 			return

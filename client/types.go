@@ -14,12 +14,9 @@ type InputMessage struct {
 	Recipients []string `json:"recipients"`
 }
 
-type SelfKeyConfig struct {
-	Private        string `json:"private"`
-	Public         string `json:"public"`
-	SigningPrivate string `json:"signingPrivate"`
-	SigningPublic  string `json:"signingPublic"`
-	AuthToken      string `json:"authToken"`
+type KeyConfig struct {
+	PrivateKeys  string `json:"privateKeysDir"`
+	ExternalKeys string `json:"externalKeysDir"`
 }
 
 type ServerConfig struct {
@@ -29,10 +26,9 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	UserID          string        `json:"userId"`
-	SelfKeyConfig   SelfKeyConfig `json:"selfKeyConfig"`
-	ExternalKeysDir string        `json:"externalKeysDir"`
-	ServerConfig    ServerConfig  `json:"serverConfig"`
+	UserID       string       `json:"userId"`
+	Keys         KeyConfig    `json:"keyConfig"`
+	ServerConfig ServerConfig `json:"serverConfig"`
 }
 
 type CreateUserRequest struct {

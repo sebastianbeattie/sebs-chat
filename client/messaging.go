@@ -30,7 +30,7 @@ func createWebsocketUrl(serverConfig ServerConfig, temporaryToken string) string
 }
 
 func connectGroup(group string, config Config) error {
-	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
+	authToken, err := getAuthToken(config)
 	if err != nil {
 		return fmt.Errorf("error reading auth token: %v", err)
 	}

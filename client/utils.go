@@ -17,7 +17,7 @@ func checkRecipientKeysExist(recipients []string, config Config) []string {
 }
 
 func keyExists(recipient string, config Config) bool {
-	fileExists, _ := exists(config.ExternalKeysDir + "/" + recipient + "/public.key")
+	fileExists, _ := exists(config.Keys.ExternalKeys + "/" + recipient + "/public.key")
 	return fileExists
 }
 
