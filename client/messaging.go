@@ -111,9 +111,14 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 		return fmt.Errorf("error encrypting message: %v", err)
 	}
 
-	outgoingMessage := EncryptedMessageContainer{
+	encryptedMessageContainer := EncryptedMessageContainer{
 		GroupName: group.GroupName,
 		Message:   encryptedMessage,
+	}
+
+	outgoingMessage := MessageContainer{
+		MessageType: "chat-message",
+		Message:     encryptedMessageContainer,
 	}
 
 	outgoingMessageBytes, err := json.Marshal(outgoingMessage)

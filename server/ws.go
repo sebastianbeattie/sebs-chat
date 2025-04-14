@@ -43,21 +43,32 @@ func websocketHandler(c *websocket.Conn) {
 
 		log.Printf("recv: %s", messageBytes)
 
-		messageContainer := &MessageContainer{}
+		messageContainer := &WebSocketMessage{}
 		if err = json.Unmarshal(messageBytes, messageContainer); err != nil {
 			log.Println("unmarshal error:", err)
 			continue
 		}
 
-		recipients := getRecipients(messageContainer.GroupName)
-		for _, recipient := range recipients {
-			if err := recipient.Connection.WriteJSON(messageContainer); err != nil {
-				log.Printf("write to recipient error: %v\n", err)
+		switch messageContainer.MessageType {
+		case "chat-message":
+			textMessage, ok := messageContainer.Message.(TextMessageContainer)
+			if !ok {
+				log.Println("Failed to cast message to TextMessageContainer")
+				continue
 			}
-		}
+			recipients := getRecipients(textMessage.GroupName)
+			for _, recipient := range recipients {
+				if err := recipient.Connection.WriteJSON(messageContainer); err != nil {
+					log.Printf("write to recipient error: %v\n", err)
+				}
+			}
 
-		if err = c.WriteMessage(messageType, messageBytes); err != nil {
-			log.Printf("echo write error: %v\n", err)
+			if err = c.WriteMessage(messageType, messageBytes); err != nil {
+				log.Printf("echo write error: %v\n", err)
+			}
+		default:
+			log.Printf("unknown message type: %s\n", messageContainer.MessageType)
+
 		}
 	}
 }
