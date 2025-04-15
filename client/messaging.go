@@ -55,7 +55,6 @@ func connectGroup(group string, config Config) error {
 	fmt.Println("Connected to websocket server")
 
 	sendJoinLeaveMessage(ws, group, config, "join")
-	defer sendJoinLeaveMessage(ws, group, config, "leave")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -77,6 +76,7 @@ func connectGroup(group string, config Config) error {
 	cancel()
 	fmt.Println("\nDisconnecting from group...")
 
+	sendJoinLeaveMessage(ws, group, config, "leave")
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		fmt.Println("Error sending close message:", err)
@@ -234,9 +234,9 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 					username = "Unknown User"
 				}
 				if joinLeaveEvent.EventType == "join" {
-					displayMessage("Member Joined", fmt.Sprintf("%s joined the chat", username), "#00ff00", "#000000")
+					displayMessage("Member Joined", fmt.Sprintf("%s joined the chat", username), "#4287f5", "#679df5")
 				} else if joinLeaveEvent.EventType == "leave" {
-					displayMessage("Member Left", fmt.Sprintf("%s left the chat", username), "#00ff00", "#000000")
+					displayMessage("Member Left", fmt.Sprintf("%s left the chat", username), "#f02b60", "#ed8aa4")
 				}
 
 			default:
