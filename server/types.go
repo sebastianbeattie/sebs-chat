@@ -92,5 +92,5 @@ type EncryptedMessage struct {
 
 type WebSocketMessage struct {
 	MessageType string `json:"type"`
-	Message     any    `json:"message"`
+	Message     string `json:"message"`
 }

@@ -51,11 +51,14 @@ func websocketHandler(c *websocket.Conn) {
 
 		switch messageContainer.MessageType {
 		case "chat-message":
-			textMessage, ok := messageContainer.Message.(TextMessageContainer)
-			if !ok {
-				log.Println("Failed to cast message to TextMessageContainer")
+
+			textMessage := &TextMessageContainer{}
+			err := json.Unmarshal([]byte(messageContainer.Message), textMessage)
+			if err != nil {
+				log.Println("unmarshal error:", err)
 				continue
 			}
+
 			recipients := getRecipients(textMessage.GroupName)
 			for _, recipient := range recipients {
 				if err := recipient.Connection.WriteJSON(messageContainer); err != nil {
