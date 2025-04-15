@@ -54,6 +54,9 @@ func connectGroup(group string, config Config) error {
 
 	fmt.Println("Connected to websocket server")
 
+	sendJoinLeaveMessage(ws, group, config, "join")
+	defer sendJoinLeaveMessage(ws, group, config, "leave")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer disconnectWebSocket(ws)
@@ -80,6 +83,33 @@ func connectGroup(group string, config Config) error {
 	}
 
 	return nil
+}
+
+func sendJoinLeaveMessage(ws *websocket.Conn, group string, config Config, eventType string) {
+	joinLeaveEventContainer := JoinLeaveEventContainer{
+		GroupName: group,
+		EventType: eventType,
+		UserHash:  hashString(config.UserID),
+	}
+	joinLeaveEventBytes, err := json.Marshal(joinLeaveEventContainer)
+	if err != nil {
+		displayError(fmt.Sprintf("error marshalling join/leave event: %v", err))
+		return
+	}
+	outgoingMessage := WebSocketMessage{
+		MessageType: "join-leave-event",
+		Message:     joinLeaveEventBytes,
+	}
+	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
+	if err != nil {
+		displayError(fmt.Sprintf("error marshalling outgoing message: %v", err))
+		return
+	}
+	err = ws.WriteMessage(websocket.TextMessage, outgoingMessageBytes)
+	if err != nil {
+		displayError(fmt.Sprintf("error sending join/leave message: %v", err))
+		return
+	}
 }
 
 func sendMessage(ws *websocket.Conn, group Group, config Config, message string) error {
@@ -189,6 +219,26 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				}
 
 				displayMessage(decryptedMessage.Author, decryptedMessage.RawText, "#de8b04", "#ffffff")
+			case "join-leave-event":
+				joinLeaveEvent := &JoinLeaveEventContainer{}
+				if err = json.Unmarshal(messageContainer.Message, joinLeaveEvent); err != nil {
+					displayError(fmt.Sprintf("Malformed join/leave event: %s\nError: %v\n", string(message), err))
+					continue
+				}
+				if joinLeaveEvent.UserHash == hashString(config.UserID) {
+					continue
+				}
+
+				username, err := getUsernameFromHash(joinLeaveEvent.UserHash, config)
+				if err != nil {
+					username = "Unknown User"
+				}
+				if joinLeaveEvent.EventType == "join" {
+					displayMessage("Member Joined", fmt.Sprintf("%s joined the chat", username), "#00ff00", "#000000")
+				} else if joinLeaveEvent.EventType == "leave" {
+					displayMessage("Member Left", fmt.Sprintf("%s left the chat", username), "#00ff00", "#000000")
+				}
+
 			default:
 				displayError(fmt.Sprintf("Unknown message type: %s\n", messageContainer.MessageType))
 			}

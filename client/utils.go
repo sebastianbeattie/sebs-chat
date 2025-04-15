@@ -40,3 +40,16 @@ func contains(a []string, b string) bool {
 	}
 	return false
 }
+
+func getUsernameFromHash(hash string, config Config) (string, error) {
+	files, err := os.ReadDir(config.Keys.ExternalKeys)
+	if err != nil {
+		return "", err
+	}
+	for _, file := range files {
+		if hashString(file.Name()) == hash {
+			return file.Name(), nil
+		}
+	}
+	return "", errors.New("username not found")
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/gofiber/contrib/websocket"
@@ -10,7 +11,6 @@ import (
 func websocketHandler(c *websocket.Conn) {
 	var (
 		connectionMetadata *ConnectionMetadata
-		messageType        int
 		messageBytes       []byte
 		err                error
 	)
@@ -35,7 +35,7 @@ func websocketHandler(c *websocket.Conn) {
 	connectionMetadata.Connection = c
 
 	for {
-		messageType, messageBytes, err = c.ReadMessage()
+		_, messageBytes, err = c.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket closed for token %s: %v\n", token, err)
 			break
@@ -57,20 +57,40 @@ func websocketHandler(c *websocket.Conn) {
 				log.Println("unmarshal error:", err)
 				continue
 			}
-
-			recipients := getRecipients(textMessage.GroupName)
-			for _, recipient := range recipients {
-				if err := recipient.Connection.WriteJSON(messageContainer); err != nil {
-					log.Printf("write to recipient error: %v\n", err)
-				}
+			err = broadcastToGroup(textMessage.GroupName, messageContainer, *c)
+			if err != nil {
+				log.Println("broadcast error:", err)
+				continue
 			}
-
-			if err = c.WriteMessage(messageType, messageBytes); err != nil {
-				log.Printf("echo write error: %v\n", err)
+		case "join-leave-event":
+			event := &JoinLeaveEvent{}
+			err := json.Unmarshal(messageContainer.Message, event)
+			if err != nil {
+				log.Println("unmarshal error:", err)
+				continue
+			}
+			err = broadcastToGroup(event.GroupName, messageContainer, *c)
+			if err != nil {
+				log.Println("broadcast error:", err)
+				continue
 			}
 		default:
 			log.Printf("unknown message type: %s\n", messageContainer.MessageType)
-
 		}
 	}
+}
+
+func broadcastToGroup(group string, messageContainer *WebSocketMessage, self websocket.Conn) error {
+	recipients := getRecipients(group)
+	for _, recipient := range recipients {
+		if err := recipient.Connection.WriteJSON(messageContainer); err != nil {
+			return fmt.Errorf("write to recipient error: %v", err)
+		}
+	}
+
+	if err := self.WriteJSON(messageContainer); err != nil {
+		return fmt.Errorf("echo write error: %v", err)
+	}
+
+	return nil
 }

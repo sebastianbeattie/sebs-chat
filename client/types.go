@@ -95,3 +95,9 @@ type WebSocketMessage struct {
 	MessageType string          `json:"type"`
 	Message     json.RawMessage `json:"message"`
 }
+
+type JoinLeaveEventContainer struct {
+	EventType string `json:"eventType"`
+	GroupName string `json:"groupName"`
+	UserHash  string `json:"user"`
+}
