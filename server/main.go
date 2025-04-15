@@ -24,7 +24,6 @@ func main() {
 	})
 
 	// WebSocket endpoint
-
 	app.Use("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
 		if token == "" {

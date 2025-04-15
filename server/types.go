@@ -1,6 +1,10 @@
 package main
 
-import "github.com/gofiber/contrib/websocket"
+import (
+	"encoding/json"
+
+	"github.com/gofiber/contrib/websocket"
+)
 
 type Config struct {
 	MongoDbConnectionString string `json:"mongoDbConnectionString"`
@@ -76,7 +80,7 @@ type ConnectionMetadata struct {
 	ConnectToken string
 }
 
-type MessageContainer struct {
+type TextMessageContainer struct {
 	GroupName string           `json:"groupName"`
 	Message   EncryptedMessage `json:"message"`
 }
@@ -88,4 +92,15 @@ type EncryptedMessage struct {
 	Signature        string            `json:"signature"`
 	SigningPublicKey string            `json:"signingPublicKey"`
 	Sender           string            `json:"sender"`
+}
+
+type WebSocketMessage struct {
+	MessageType string          `json:"type"`
+	Message     json.RawMessage `json:"message"`
+}
+
+type JoinLeaveEvent struct {
+	GroupName string `json:"groupName"`
+	UserHash  string `json:"user"`
+	EventType string `json:"eventType"` // "join" or "leave"
 }

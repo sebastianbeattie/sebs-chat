@@ -13,7 +13,7 @@ func printGroupInfo(group Group) {
 }
 
 func createMessageGroup(inputFile string, config Config) (Group, error) {
-	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
+	authToken, err := getAuthToken(config)
 	if err != nil {
 		return Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}
@@ -32,7 +32,7 @@ func createMessageGroup(inputFile string, config Config) (Group, error) {
 }
 
 func getGroupInfo(groupName string, config Config) (Group, error) {
-	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
+	authToken, err := getAuthToken(config)
 	if err != nil {
 		return Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}
@@ -49,7 +49,7 @@ func getGroupInfo(groupName string, config Config) (Group, error) {
 }
 
 func getGroupsContainingMember(config Config) ([]Group, error) {
-	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
+	authToken, err := getAuthToken(config)
 	if err != nil {
 		return []Group{}, fmt.Errorf("error reading auth token: %v", err)
 	}

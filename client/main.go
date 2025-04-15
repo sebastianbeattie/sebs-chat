@@ -19,13 +19,22 @@ func main() {
 		fmt.Println("Error opening config file:", err)
 		return
 	}
-	defer jsonFile.Close()
+	defer func(jsonFile *os.File) {
+		err := jsonFile.Close()
+		if err != nil {
+			fmt.Println("Error closing config file:", err)
+		}
+	}(jsonFile)
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
 		fmt.Println("Error reading config file:", err)
 		return
 	}
-	json.Unmarshal(byteValue, &config)
+	err = json.Unmarshal(byteValue, &config)
+	if err != nil {
+		fmt.Println("Error unmarshalling config file:", err)
+		return
+	}
 
 	if args.Command == "" {
 		fmt.Println("No command provided")
@@ -35,13 +44,13 @@ func main() {
 	switch args.Command {
 	case "keygen":
 		fmt.Println("Generating keys...")
-		err := createKeypair(config.SelfKeyConfig)
+		err = createKeypair(config.Keys.PrivateKeys)
 		if err != nil {
 			fmt.Println("Error generating key pair:", err)
 			return
 		}
 		fmt.Println("X25519 key pair saved")
-		err = createSigningKeypair(config.SelfKeyConfig)
+		err = createSigningKeypair(config.Keys.PrivateKeys)
 		if err != nil {
 			fmt.Println("Error generating signing key pair:", err)
 			return
@@ -79,14 +88,14 @@ func main() {
 	case "register":
 		fmt.Println("Registering user...")
 		request := CreateUserRequest{Username: config.UserID}
-		err := createUser(config, request)
+		err = createUser(config, request)
 		if err != nil {
 			fmt.Println("Error creating user:", err)
 			return
 		}
 		fmt.Println("User registered successfully.")
 	case "create-group":
-		group, err := createMessageGroup(args.Input, config)
+		group, err = createMessageGroup(args.Input, config)
 		if err != nil {
 			fmt.Println("Error creating group:", err)
 			return
@@ -94,14 +103,14 @@ func main() {
 		fmt.Printf("Created group '%s' successfully!\n", group.GroupName)
 		printGroupInfo(group)
 	case "group-info":
-		group, err := getGroupInfo(args.Group, config)
+		group, err = getGroupInfo(args.Group, config)
 		if err != nil {
 			fmt.Println("Error getting group info:", err)
 			return
 		}
 		printGroupInfo(group)
 	case "connect":
-		err := connectGroup(args.Group, config)
+		err = connectGroup(args.Group, config)
 		if err != nil {
 			fmt.Println("Error connecting to group:", err)
 			return

@@ -11,7 +11,9 @@ import (
 	"github.com/fasthttp/websocket"
 )
 
-func websocketUrl(serverConfig ServerConfig, temporaryToken string) string {
+var warningsDisplayed []string
+
+func createWebsocketUrl(serverConfig ServerConfig, temporaryToken string) string {
 	url := "ws"
 	if serverConfig.UseTls {
 		url = "wss"
@@ -28,7 +30,7 @@ func websocketUrl(serverConfig ServerConfig, temporaryToken string) string {
 }
 
 func connectGroup(group string, config Config) error {
-	authToken, err := readTextFromFile(config.SelfKeyConfig.AuthToken)
+	authToken, err := getAuthToken(config)
 	if err != nil {
 		return fmt.Errorf("error reading auth token: %v", err)
 	}
@@ -44,13 +46,15 @@ func connectGroup(group string, config Config) error {
 
 	fmt.Printf("Created connect request for group %s\n", group)
 
-	websocketUrl := websocketUrl(config.ServerConfig, loginResponse.ConnectToken)
+	websocketUrl := createWebsocketUrl(config.ServerConfig, loginResponse.ConnectToken)
 	ws, err := connectToWebSocket(websocketUrl)
 	if err != nil {
 		return fmt.Errorf("error connecting to websocket: %v", err)
 	}
 
 	fmt.Println("Connected to websocket server")
+
+	sendJoinLeaveMessage(ws, group, config, "join")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -72,6 +76,7 @@ func connectGroup(group string, config Config) error {
 	cancel()
 	fmt.Println("\nDisconnecting from group...")
 
+	sendJoinLeaveMessage(ws, group, config, "leave")
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		fmt.Println("Error sending close message:", err)
@@ -80,10 +85,55 @@ func connectGroup(group string, config Config) error {
 	return nil
 }
 
+func sendJoinLeaveMessage(ws *websocket.Conn, group string, config Config, eventType string) {
+	joinLeaveEventContainer := JoinLeaveEventContainer{
+		GroupName: group,
+		EventType: eventType,
+		UserHash:  hashString(config.UserID),
+	}
+	joinLeaveEventBytes, err := json.Marshal(joinLeaveEventContainer)
+	if err != nil {
+		displayError(fmt.Sprintf("error marshalling join/leave event: %v", err))
+		return
+	}
+	outgoingMessage := WebSocketMessage{
+		MessageType: "join-leave-event",
+		Message:     joinLeaveEventBytes,
+	}
+	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
+	if err != nil {
+		displayError(fmt.Sprintf("error marshalling outgoing message: %v", err))
+		return
+	}
+	err = ws.WriteMessage(websocket.TextMessage, outgoingMessageBytes)
+	if err != nil {
+		displayError(fmt.Sprintf("error sending join/leave message: %v", err))
+		return
+	}
+}
+
 func sendMessage(ws *websocket.Conn, group Group, config Config, message string) error {
+	filteredRecipients := removeUserIdFromRecipientList(group.Members, config.UserID)
+	recipientsWithoutKeys := checkRecipientKeysExist(filteredRecipients, config)
+
+	for _, recipient := range recipientsWithoutKeys {
+		if !contains(warningsDisplayed, recipient) {
+			warningsDisplayed = append(warningsDisplayed, recipient)
+			displayWarning(fmt.Sprintf("Couldn't find the public key for %s - they will not receive your messages until this is resolved", recipient))
+		}
+	}
+
+	for _, recipient := range recipientsWithoutKeys {
+		filteredRecipients = removeUserIdFromRecipientList(filteredRecipients, recipient)
+	}
+
+	if len(filteredRecipients) == 0 {
+		return nil
+	}
+
 	inputMessage := InputMessage{
 		RawText:    message,
-		Recipients: removeUserIdFromRecipientList(group.Members, config.UserID),
+		Recipients: filteredRecipients,
 	}
 
 	encryptedMessage, err := encrypt(inputMessage, config)
@@ -91,9 +141,18 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 		return fmt.Errorf("error encrypting message: %v", err)
 	}
 
-	outgoingMessage := MessageContainer{
+	encryptedMessageContainer := EncryptedMessageContainer{
 		GroupName: group.GroupName,
 		Message:   encryptedMessage,
+	}
+	encryptedMessageBytes, err := json.Marshal(encryptedMessageContainer)
+	if err != nil {
+		return fmt.Errorf("error marshalling encrypted message: %v", err)
+	}
+
+	outgoingMessage := WebSocketMessage{
+		MessageType: "chat-message",
+		Message:     encryptedMessageBytes,
 	}
 
 	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
@@ -135,23 +194,54 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				return
 			}
 
-			var incomingMessage MessageContainer
-			if err := json.Unmarshal(message, &incomingMessage); err != nil {
-				fmt.Printf("Malformed message: %s\nError: %v\n", string(message), err)
+			messageContainer := &WebSocketMessage{}
+			if err = json.Unmarshal(message, &messageContainer); err != nil {
+				displayError(fmt.Sprintf("Malformed message: %s\nError: %v\n", string(message), err))
 				continue
 			}
 
-			if incomingMessage.Message.Sender == config.UserID {
-				continue
-			}
+			switch messageContainer.MessageType {
+			case "chat-message":
+				incomingMessage := &EncryptedMessageContainer{}
+				if err = json.Unmarshal(messageContainer.Message, incomingMessage); err != nil {
+					displayError(fmt.Sprintf("Malformed chat message: %s\nError: %v\n", string(message), err))
+					continue
+				}
 
-			decryptedMessage, err := decrypt(incomingMessage.Message, config)
-			if err != nil {
-				fmt.Println("Error decrypting message:", err)
-				continue
-			}
+				if incomingMessage.Message.Sender == config.UserID {
+					continue
+				}
 
-			displayMessage(decryptedMessage.Author, decryptedMessage.RawText)
+				decryptedMessage, err := decrypt(incomingMessage.Message, config)
+				if err != nil {
+					displayError(fmt.Sprintf("Error decrypting message: %v", err))
+					continue
+				}
+
+				displayMessage(decryptedMessage.Author, decryptedMessage.RawText, "#de8b04", "#ffffff")
+			case "join-leave-event":
+				joinLeaveEvent := &JoinLeaveEventContainer{}
+				if err = json.Unmarshal(messageContainer.Message, joinLeaveEvent); err != nil {
+					displayError(fmt.Sprintf("Malformed join/leave event: %s\nError: %v\n", string(message), err))
+					continue
+				}
+				if joinLeaveEvent.UserHash == hashString(config.UserID) {
+					continue
+				}
+
+				username, err := getUsernameFromHash(joinLeaveEvent.UserHash, config)
+				if err != nil {
+					username = "Unknown User"
+				}
+				if joinLeaveEvent.EventType == "join" {
+					displayMessage("Member Joined", fmt.Sprintf("%s joined the chat", username), "#4287f5", "#679df5")
+				} else if joinLeaveEvent.EventType == "leave" {
+					displayMessage("Member Left", fmt.Sprintf("%s left the chat", username), "#f02b60", "#ed8aa4")
+				}
+
+			default:
+				displayError(fmt.Sprintf("Unknown message type: %s\n", messageContainer.MessageType))
+			}
 		}
 	}
 }

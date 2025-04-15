@@ -3,15 +3,22 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
 
+func hashString(s string) string {
+	hash := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(hash[:])
+}
+
 func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error) {
-	senderPriv, err := loadKeyFromFile(config.SelfKeyConfig.Private)
+	senderPriv, err := loadKeyFromFile(fmt.Sprintf("%s/private.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return EncryptedMessage{}, fmt.Errorf("error loading sender private key: %v", err)
 	}
@@ -26,7 +33,7 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 
 	encryptedKeys := make(map[string]string)
 	for _, user := range inputMessage.Recipients {
-		pubPath := getUserPublicKey(config.ExternalKeysDir, user)
+		pubPath := getUserPublicKey(config.Keys.ExternalKeys, user)
 		pub, err := loadKeyFromFile(pubPath)
 		if err != nil {
 			return EncryptedMessage{}, fmt.Errorf("error loading recipient public key: %v", err)
@@ -39,15 +46,17 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		if err != nil {
 			return EncryptedMessage{}, fmt.Errorf("error encrypting symmetric key: %v", err)
 		}
-		encryptedKeys[user] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
+		userHash := hashString(user)
+
+		encryptedKeys[userHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
 	}
 
-	sig, err := signMessage(ciphertext, config.SelfKeyConfig.SigningPrivate)
+	sig, err := signMessage(ciphertext, fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
 	}
 
-	signingPub, err := loadKeyFromFile(config.SelfKeyConfig.SigningPublic)
+	signingPub, err := loadKeyFromFile(fmt.Sprintf("%s/signing_public.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return EncryptedMessage{}, fmt.Errorf("error loading signing public key: %v", err)
 	}
@@ -68,12 +77,14 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
 	}
 
-	priv, err := loadKeyFromFile(config.SelfKeyConfig.Private)
+	hashedUsername := hashString(config.UserID)
+
+	priv, err := loadKeyFromFile(fmt.Sprintf("%s/private.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading private key: %v", err)
 	}
 
-	senderPubPath := getUserPublicKey(config.ExternalKeysDir, msg.Sender)
+	senderPubPath := getUserPublicKey(config.Keys.ExternalKeys, msg.Sender)
 	senderPub, err := loadKeyFromFile(senderPubPath)
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading sender public key: %v", err)
@@ -84,7 +95,7 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
 	}
 
-	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[config.UserID])
+	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[hashedUsername])
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error decoding encrypted key: %v", err)
 	}
@@ -143,32 +154,32 @@ func generateX25519KeyPair() ([]byte, []byte, error) {
 	return priv, pub, err
 }
 
-func createSigningKeypair(selfKeyConfig SelfKeyConfig) error {
+func createSigningKeypair(keysDir string) error {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return fmt.Errorf("error generating Ed25519 keypair: %v", err)
 	}
-	err = saveKeyToFile(selfKeyConfig.SigningPrivate, priv)
+	err = saveKeyToFile(fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys), priv)
 	if err != nil {
 		return err
 	}
-	err = saveKeyToFile(selfKeyConfig.SigningPublic, pub)
+	err = saveKeyToFile(fmt.Sprintf("%s/signing_public.key", config.Keys.PrivateKeys), pub)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func createKeypair(selfKeyConfig SelfKeyConfig) error {
+func createKeypair(keyDir string) error {
 	priv, pub, err := generateX25519KeyPair()
 	if err != nil {
 		return fmt.Errorf("error generating key pair: %v", err)
 	}
-	err = saveKeyToFile(selfKeyConfig.Private, priv)
+	err = saveKeyToFile(fmt.Sprintf("%s/private.key", keyDir), priv)
 	if err != nil {
 		return err
 	}
-	err = saveKeyToFile(selfKeyConfig.Public, pub)
+	err = saveKeyToFile(fmt.Sprintf("%s/public.key", keyDir), pub)
 	if err != nil {
 		return err
 	}

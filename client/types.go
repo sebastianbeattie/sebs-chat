@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 type EncryptedMessage struct {
 	Ciphertext       string            `json:"ciphertext"`
 	Nonce            string            `json:"nonce"`
@@ -14,12 +16,9 @@ type InputMessage struct {
 	Recipients []string `json:"recipients"`
 }
 
-type SelfKeyConfig struct {
-	Private        string `json:"private"`
-	Public         string `json:"public"`
-	SigningPrivate string `json:"signingPrivate"`
-	SigningPublic  string `json:"signingPublic"`
-	AuthToken      string `json:"authToken"`
+type KeyConfig struct {
+	PrivateKeys  string `json:"privateKeysDir"`
+	ExternalKeys string `json:"externalKeysDir"`
 }
 
 type ServerConfig struct {
@@ -29,10 +28,9 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	UserID          string        `json:"userId"`
-	SelfKeyConfig   SelfKeyConfig `json:"selfKeyConfig"`
-	ExternalKeysDir string        `json:"externalKeysDir"`
-	ServerConfig    ServerConfig  `json:"serverConfig"`
+	UserID       string       `json:"userId"`
+	Keys         KeyConfig    `json:"keyConfig"`
+	ServerConfig ServerConfig `json:"serverConfig"`
 }
 
 type CreateUserRequest struct {
@@ -88,7 +86,18 @@ type DecryptedMessage struct {
 	Author  string `json:"author"`
 }
 
-type MessageContainer struct {
+type EncryptedMessageContainer struct {
 	GroupName string           `json:"groupName"`
 	Message   EncryptedMessage `json:"message"`
+}
+
+type WebSocketMessage struct {
+	MessageType string          `json:"type"`
+	Message     json.RawMessage `json:"message"`
+}
+
+type JoinLeaveEventContainer struct {
+	EventType string `json:"eventType"`
+	GroupName string `json:"groupName"`
+	UserHash  string `json:"user"`
 }

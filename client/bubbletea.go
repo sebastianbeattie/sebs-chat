@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fasthttp/websocket"
+	"github.com/muesli/termenv"
 )
 
 type display struct {
@@ -31,13 +32,9 @@ var (
 	incomingMessages chan tea.Msg
 )
 
-// === UI Lifecycle ===
-
 func (m display) Init() tea.Cmd {
 	return waitForIncoming() // Begin listening for messages
 }
-
-// === Command Utilities ===
 
 func waitForIncoming() tea.Cmd {
 	return func() tea.Msg {
@@ -45,14 +42,26 @@ func waitForIncoming() tea.Cmd {
 	}
 }
 
-// Called from the WebSocket goroutine
-func displayMessage(sender, message string) {
-	if incomingMessages != nil {
-		incomingMessages <- newMessage{sender, message}
-	}
+func displayWarning(message string) {
+	displayMessage("Warning", message, "#ff8400", "#f5a651")
 }
 
-// === Update Loop ===
+func displayError(message string) {
+	displayMessage("Error", message, "#c40000", "#cf5b51")
+}
+
+func displayMessage(sender, message, senderColour, messageColour string) {
+	if incomingMessages != nil {
+		profile := termenv.ColorProfile()
+		coloredSender := termenv.String(sender).Foreground(profile.Color(senderColour)).Bold()
+		coloredMessage := termenv.String(message).Foreground(profile.Color(messageColour))
+
+		incomingMessages <- newMessage{
+			sender:  coloredSender.String(),
+			message: coloredMessage.String(),
+		}
+	}
+}
 
 func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -82,10 +91,10 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.TrimSpace(text) != "" {
 				err := sendMessage(webSocket, group, config, text)
 				if err != nil {
-					displayMessage("Error", err.Error())
+					displayError(err.Error())
 				} else {
 					m.input.Reset()
-					displayMessage("You", text)
+					displayMessage("You", text, "#3ede04", "#ffffff")
 				}
 			}
 		case tea.KeyEsc:
@@ -107,13 +116,9 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// === View ===
-
 func (m display) View() string {
 	return fmt.Sprintf("%s\n\n%s", m.viewport.View(), m.input.View())
 }
-
-// === Entrypoint ===
 
 func createUi(g Group, ws *websocket.Conn, c Config) error {
 	group = g
