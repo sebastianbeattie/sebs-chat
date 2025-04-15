@@ -208,7 +208,7 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 					continue
 				}
 
-				if incomingMessage.Message.Sender == config.UserID {
+				if incomingMessage.Message.Sender == hashString(config.UserID) {
 					continue
 				}
 
