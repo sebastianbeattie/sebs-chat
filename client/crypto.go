@@ -63,28 +63,32 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 
 	outputMsg := EncryptedMessage{
 		Ciphertext:       base64.StdEncoding.EncodeToString(ciphertext),
-		Nonce:            base64.StdEncoding.EncodeToString(nonce),
+		Verify:           base64.StdEncoding.EncodeToString(nonce),
 		EncryptedKeys:    encryptedKeys,
 		Signature:        base64.StdEncoding.EncodeToString(sig),
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
-		Sender:           config.UserID,
+		Sender:           hashString(config.UserID),
 	}
 	return outputMsg, nil
 }
 
 func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
-	if msg.Sender == config.UserID {
+	hashedUsername := hashString(config.UserID)
+	if msg.Sender == hashedUsername {
 		return DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
 	}
 
-	hashedUsername := hashString(config.UserID)
+	senderUsername, err := getUsernameFromHash(msg.Sender, config)
+	if err != nil {
+		return DecryptedMessage{}, fmt.Errorf("unable to determine sender's username: %v", err)
+	}
 
 	priv, err := loadKeyFromFile(fmt.Sprintf("%s/private.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading private key: %v", err)
 	}
 
-	senderPubPath := getUserPublicKey(config.Keys.ExternalKeys, msg.Sender)
+	senderPubPath := getUserPublicKey(config.Keys.ExternalKeys, senderUsername)
 	senderPub, err := loadKeyFromFile(senderPubPath)
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading sender public key: %v", err)
@@ -107,7 +111,7 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("error decrypting symmetric key: %v", err)
 	}
 
-	nonce, err := base64.StdEncoding.DecodeString(msg.Nonce)
+	nonce, err := base64.StdEncoding.DecodeString(msg.Verify)
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
 	}
@@ -138,7 +142,7 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 
 	decryptedMessage := DecryptedMessage{
 		RawText: string(plaintext),
-		Author:  msg.Sender,
+		Author:  senderUsername,
 	}
 
 	return decryptedMessage, nil

@@ -51,5 +51,5 @@ func getUsernameFromHash(hash string, config Config) (string, error) {
 			return file.Name(), nil
 		}
 	}
-	return "", errors.New("username not found")
+	return "", errors.New("username not found (keys have not been exchanged)")
 }

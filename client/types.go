@@ -4,7 +4,7 @@ import "encoding/json"
 
 type EncryptedMessage struct {
 	Ciphertext       string            `json:"ciphertext"`
-	Nonce            string            `json:"nonce"`
+	Verify           string            `json:"verify"`
 	EncryptedKeys    map[string]string `json:"encryptedKeys"`
 	Signature        string            `json:"signature"`
 	SigningPublicKey string            `json:"signingPublicKey"`
