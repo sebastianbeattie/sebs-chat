@@ -51,9 +51,8 @@ func websocketHandler(c *websocket.Conn) {
 
 		switch messageContainer.MessageType {
 		case "chat-message":
-
 			textMessage := &TextMessageContainer{}
-			err := json.Unmarshal([]byte(messageContainer.Message), textMessage)
+			err := json.Unmarshal(messageContainer.Message, textMessage)
 			if err != nil {
 				log.Println("unmarshal error:", err)
 				continue

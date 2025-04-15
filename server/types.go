@@ -1,6 +1,10 @@
 package main
 
-import "github.com/gofiber/contrib/websocket"
+import (
+	"encoding/json"
+
+	"github.com/gofiber/contrib/websocket"
+)
 
 type Config struct {
 	MongoDbConnectionString string `json:"mongoDbConnectionString"`
@@ -91,6 +95,6 @@ type EncryptedMessage struct {
 }
 
 type WebSocketMessage struct {
-	MessageType string `json:"type"`
-	Message     string `json:"message"`
+	MessageType string          `json:"type"`
+	Message     json.RawMessage `json:"message"`
 }

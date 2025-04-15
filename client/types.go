@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 type EncryptedMessage struct {
 	Ciphertext       string            `json:"ciphertext"`
 	Nonce            string            `json:"nonce"`
@@ -89,7 +91,7 @@ type EncryptedMessageContainer struct {
 	Message   EncryptedMessage `json:"message"`
 }
 
-type MessageContainer struct {
-	MessageType string `json:"type"`
-	Message     any    `json:"message"`
+type WebSocketMessage struct {
+	MessageType string          `json:"type"`
+	Message     json.RawMessage `json:"message"`
 }

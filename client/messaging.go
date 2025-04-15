@@ -115,10 +115,14 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 		GroupName: group.GroupName,
 		Message:   encryptedMessage,
 	}
+	encryptedMessageBytes, err := json.Marshal(encryptedMessageContainer)
+	if err != nil {
+		return fmt.Errorf("error marshalling encrypted message: %v", err)
+	}
 
-	outgoingMessage := MessageContainer{
+	outgoingMessage := WebSocketMessage{
 		MessageType: "chat-message",
-		Message:     encryptedMessageContainer,
+		Message:     encryptedMessageBytes,
 	}
 
 	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
@@ -160,23 +164,34 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				return
 			}
 
-			var incomingMessage EncryptedMessageContainer
-			if err = json.Unmarshal(message, &incomingMessage); err != nil {
-				fmt.Printf("Malformed message: %s\nError: %v\n", string(message), err)
+			messageContainer := &WebSocketMessage{}
+			if err = json.Unmarshal(message, &messageContainer); err != nil {
+				displayError(fmt.Sprintf("Malformed message: %s\nError: %v\n", string(message), err))
 				continue
 			}
 
-			if incomingMessage.Message.Sender == config.UserID {
-				continue
-			}
+			switch messageContainer.MessageType {
+			case "chat-message":
+				incomingMessage := &EncryptedMessageContainer{}
+				if err = json.Unmarshal(messageContainer.Message, incomingMessage); err != nil {
+					displayError(fmt.Sprintf("Malformed chat message: %s\nError: %v\n", string(message), err))
+					continue
+				}
 
-			decryptedMessage, err := decrypt(incomingMessage.Message, config)
-			if err != nil {
-				fmt.Println("Error decrypting message:", err)
-				continue
-			}
+				if incomingMessage.Message.Sender == config.UserID {
+					continue
+				}
 
-			displayMessage(decryptedMessage.Author, decryptedMessage.RawText, "#de8b04", "#ffffff")
+				decryptedMessage, err := decrypt(incomingMessage.Message, config)
+				if err != nil {
+					displayError(fmt.Sprintf("Error decrypting message: %v", err))
+					continue
+				}
+
+				displayMessage(decryptedMessage.Author, decryptedMessage.RawText, "#de8b04", "#ffffff")
+			default:
+				displayError(fmt.Sprintf("Unknown message type: %s\n", messageContainer.MessageType))
+			}
 		}
 	}
 }
