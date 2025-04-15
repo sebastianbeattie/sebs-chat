@@ -3,12 +3,19 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
+
+func hashString(s string) string {
+	hash := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(hash[:])
+}
 
 func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error) {
 	senderPriv, err := loadKeyFromFile(fmt.Sprintf("%s/private.key", config.Keys.PrivateKeys))
@@ -39,7 +46,9 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		if err != nil {
 			return EncryptedMessage{}, fmt.Errorf("error encrypting symmetric key: %v", err)
 		}
-		encryptedKeys[user] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
+		userHash := hashString(user)
+
+		encryptedKeys[userHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
 	}
 
 	sig, err := signMessage(ciphertext, fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys))
@@ -68,6 +77,8 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
 	}
 
+	hashedUsername := hashString(config.UserID)
+
 	priv, err := loadKeyFromFile(fmt.Sprintf("%s/private.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error loading private key: %v", err)
@@ -84,7 +95,7 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("error deriving shared key: %v", err)
 	}
 
-	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[config.UserID])
+	encKeyFull, err := base64.StdEncoding.DecodeString(msg.EncryptedKeys[hashedUsername])
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("error decoding encrypted key: %v", err)
 	}
