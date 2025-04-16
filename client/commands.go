@@ -14,7 +14,7 @@ func runCommand(command string, args []string, ws *websocket.Conn) error {
 			return errors.New("usage: /kx <username>")
 		}
 		username := args[0]
-		err := exchangeKey(ws, username)
+		err := exchangeKey(ws, username, false)
 		if err != nil {
 			return fmt.Errorf("error exchanging key: %v", err)
 		}

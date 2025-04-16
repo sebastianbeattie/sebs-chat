@@ -247,13 +247,17 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 					continue
 				}
 
-				if config.Keys.AutoKeyExchange && !keyExchange.IsReply {
+				if keyExchange.IsReply {
+					continue
+				}
+
+				if config.Keys.AutoKeyExchange {
 					if keyAlreadyExisted {
 						displayMessage("Key Exchange", fmt.Sprintf("Public key for %s already exists, skipping automatic key exchange", keyExchange.KeyFrom), "#8d32a8", "#dd86f7")
 						continue
 					}
 
-					err := exchangeKey(ws, keyExchange.KeyFrom)
+					err := exchangeKey(ws, keyExchange.KeyFrom, true)
 					if err != nil {
 						displayError(fmt.Sprintf("Error sending public key: %v", err))
 						continue
@@ -270,13 +274,13 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 	}
 }
 
-func exchangeKey(ws *websocket.Conn, target string) error {
+func exchangeKey(ws *websocket.Conn, target string, isReply bool) error {
 	keyExchangeContainer, err := exportPublicKey(config, target)
 	if err != nil {
 		return fmt.Errorf("error exporting public key: %v", err)
 	}
 
-	keyExchangeContainer.IsReply = true
+	keyExchangeContainer.IsReply = isReply
 	keyExchangeContainerBytes, err := json.Marshal(keyExchangeContainer)
 	if err != nil {
 		return fmt.Errorf("error marshalling key exchange container: %v", err)
