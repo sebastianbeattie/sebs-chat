@@ -18,7 +18,7 @@ func runCommand(command string, args []string, ws *websocket.Conn) error {
 		if err != nil {
 			return fmt.Errorf("error exchanging key: %v", err)
 		}
-		displayMessage("Key Exchange", fmt.Sprintf("Sent public key to %s", username), "#f0c02b", "#f5e67d")
+		displayMessage("Key Exchange", fmt.Sprintf("Sent public key to %s", username), "#8d32a8", "#dd86f7")
 	default:
 		return fmt.Errorf("unknown command: %s", command)
 	}
