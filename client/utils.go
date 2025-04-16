@@ -9,13 +9,13 @@ import (
 )
 
 func checkRecipientKeysExist(recipients []string, config Config) []string {
-	var missing []string
+	var existingKeys []string
 	for _, recipient := range recipients {
-		if !keyExists(recipient, config) {
-			missing = append(missing, recipient)
+		if keyExists(recipient, config) {
+			existingKeys = append(existingKeys, recipient)
 		}
 	}
-	return missing
+	return existingKeys
 }
 
 func keyExists(recipient string, config Config) bool {

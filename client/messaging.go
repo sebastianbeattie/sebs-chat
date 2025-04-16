@@ -114,17 +114,13 @@ func sendJoinLeaveMessage(ws *websocket.Conn, group string, config Config, event
 
 func sendMessage(ws *websocket.Conn, group Group, config Config, message string) error {
 	filteredRecipients := removeUserIdFromRecipientList(group.Members, config.UserID)
-	recipientsWithoutKeys := checkRecipientKeysExist(filteredRecipients, config)
+	recipientsWithKeys := checkRecipientKeysExist(filteredRecipients, config)
 
-	for _, recipient := range recipientsWithoutKeys {
-		if !contains(warningsDisplayed, recipient) {
+	for _, recipient := range group.Members {
+		if !contains(recipientsWithKeys, recipient) && !contains(warningsDisplayed, recipient) {
 			warningsDisplayed = append(warningsDisplayed, recipient)
 			displayWarning(fmt.Sprintf("Couldn't find the public key for %s - they will not receive your messages until this is resolved", recipient))
 		}
-	}
-
-	for _, recipient := range recipientsWithoutKeys {
-		filteredRecipients = removeUserIdFromRecipientList(filteredRecipients, recipient)
 	}
 
 	if len(filteredRecipients) == 0 {
@@ -133,7 +129,7 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 
 	inputMessage := InputMessage{
 		RawText:    message,
-		Recipients: filteredRecipients,
+		Recipients: recipientsWithKeys,
 	}
 
 	encryptedMessage, err := encrypt(inputMessage, config)
