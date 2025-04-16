@@ -84,17 +84,3 @@ func importPublicKey(keyExchange KeyExchange, config Config) error {
 	}
 	return nil
 }
-
-func listKeys(config Config) ([]string, error) {
-	files, err := os.ReadDir(config.Keys.ExternalKeys)
-	if err != nil {
-		return nil, fmt.Errorf("error reading external keys directory: %v", err)
-	}
-	var keys []string
-	for _, file := range files {
-		if file.IsDir() {
-			keys = append(keys, file.Name())
-		}
-	}
-	return keys, nil
-}
