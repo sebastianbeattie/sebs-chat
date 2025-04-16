@@ -23,6 +23,10 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		return EncryptedMessage{}, fmt.Errorf("error loading sender private key: %v", err)
 	}
 
+	if len(inputMessage.Recipients) == 0 {
+		return EncryptedMessage{}, fmt.Errorf("message has no recipients")
+	}
+
 	symKey := make([]byte, 32)
 	rand.Read(symKey)
 
@@ -76,6 +80,10 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 	hashedUsername := hashString(config.UserID)
 	if msg.Sender == hashedUsername {
 		return DecryptedMessage{}, fmt.Errorf("cannot decrypt message sent by self")
+	}
+
+	if len(msg.EncryptedKeys) == 0 {
+		return DecryptedMessage{}, fmt.Errorf("message contains no keys")
 	}
 
 	senderUsername, err := getUsernameFromHash(msg.Sender, config)
