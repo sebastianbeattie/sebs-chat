@@ -242,6 +242,7 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 					continue
 				}
 
+				keyAlreadyExisted := keyExists(keyExchange.KeyFrom, config)
 				displayMessage("Key Exchange", fmt.Sprintf("Received public key from %s", keyExchange.KeyFrom), "#f0c02b", "#f5e67d")
 
 				err = importPublicKey(*keyExchange, config)
@@ -251,7 +252,7 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 				}
 
 				if config.Keys.AutoKeyExchange {
-					if keyExists(keyExchange.KeyFrom, config) {
+					if keyAlreadyExisted {
 						displayMessage("Key Exchange", fmt.Sprintf("Public key for %s already exists, skipping automatic key exchange", keyExchange.KeyFrom), "#f0c02b", "#f5e67d")
 						continue
 					}
