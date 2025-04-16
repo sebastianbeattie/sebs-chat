@@ -63,6 +63,12 @@ func writeExternalKey(userId, key string, config Config) error {
 	if err != nil {
 		return fmt.Errorf("error decoding base64 key: %v", err)
 	}
+
+	err = os.MkdirAll(fmt.Sprintf("%s/%s", config.Keys.ExternalKeys, userId), 0700)
+	if err != nil {
+		return fmt.Errorf("error creating directory for external key: %v", err)
+	}
+
 	err = saveKeyToFile(fmt.Sprintf("%s/%s/public.key", config.Keys.ExternalKeys, userId), keyBytes)
 	if err != nil {
 		return fmt.Errorf("error saving external key: %v", err)
