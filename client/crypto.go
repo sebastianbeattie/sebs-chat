@@ -163,11 +163,11 @@ func createSigningKeypair(keysDir string) error {
 	if err != nil {
 		return fmt.Errorf("error generating Ed25519 keypair: %v", err)
 	}
-	err = saveKeyToFile(fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys), priv)
+	err = saveKeyToFile(fmt.Sprintf("%s/signing_private.key", keysDir), priv)
 	if err != nil {
 		return err
 	}
-	err = saveKeyToFile(fmt.Sprintf("%s/signing_public.key", config.Keys.PrivateKeys), pub)
+	err = saveKeyToFile(fmt.Sprintf("%s/signing_public.key", keysDir), pub)
 	if err != nil {
 		return err
 	}
