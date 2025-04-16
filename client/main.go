@@ -167,12 +167,35 @@ func main() {
 		fmt.Println("----------------------")
 		fmt.Println("Total groups:", len(groups))
 		fmt.Println("----------------------")
-	case "leave-group":
+	case "export-key":
+		KeyExchange, err := exportPublicKey(config, args.Recipient)
+		if err != nil {
+			fmt.Println("Error exporting public key:", err)
+			return
+		}
+		keyExchangeBytes, err := json.MarshalIndent(KeyExchange, "", "   ")
+		if err != nil {
+			fmt.Println("Error marshalling key exchange:", err)
+			return
+		}
+		fmt.Println(string(keyExchangeBytes))
 		return
-	case "delete-group":
+	case "import-key":
+		keyExchange, err := readJson[KeyExchange](args.Input)
+		if err != nil {
+			fmt.Println("Error reading key exchange:", err)
+			return
+		}
+		err = importPublicKey(keyExchange, config)
+		if err != nil {
+			fmt.Println("Error importing public key:", err)
+			return
+		}
+		fmt.Printf("Public key imported from %s successfully\n", keyExchange.KeyFrom)
 		return
 
 	default:
 		fmt.Printf("Unsupported command '%s'\n", args.Command)
+		return
 	}
 }
