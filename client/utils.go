@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 )
@@ -52,4 +54,33 @@ func getUsernameFromHash(hash string, config Config) (string, error) {
 		}
 	}
 	return "", errors.New("username not found (keys have not been exchanged)")
+}
+
+func exportPublicKey(config Config, target string) (KeyExchange, error) {
+	keyBytes, err := loadKeyFromFile(fmt.Sprintf("%s/public.key", config.Keys.PrivateKeys))
+	if err != nil {
+		return KeyExchange{}, fmt.Errorf("error loading public key: %v", err)
+	}
+	keyString := base64.StdEncoding.EncodeToString(keyBytes)
+	keyExchangeContainer := KeyExchange{
+		KeyFrom: config.UserID,
+		KeyTo:   target,
+		Key:     keyString,
+	}
+	return keyExchangeContainer, nil
+}
+
+func importPublicKey(keyExchange KeyExchange, config Config) error {
+	if keyExchange.KeyFrom == config.UserID {
+		return fmt.Errorf("cannot import own public key")
+	}
+	if keyExchange.KeyTo != config.UserID {
+		return fmt.Errorf("key exchange not intended for this user")
+	}
+
+	err := writeExternalKey(keyExchange.KeyFrom, keyExchange.Key, config)
+	if err != nil {
+		return fmt.Errorf("error writing external key: %v", err)
+	}
+	return nil
 }

@@ -88,14 +88,31 @@ func (m display) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			text := m.input.Value()
-			if strings.TrimSpace(text) != "" {
-				err := sendMessage(webSocket, group, config, text)
+			if strings.TrimSpace(text) == "" {
+				return m, nil
+			}
+
+			text = strings.TrimSpace(text)
+			if strings.HasPrefix(text, "/") {
+				parts := strings.Fields(text)
+				command := parts[0][1:] // Remove the leading '/'
+				args := parts[1:]
+
+				err := runCommand(command, args, webSocket)
 				if err != nil {
 					displayError(err.Error())
 				} else {
 					m.input.Reset()
-					displayMessage("You", text, "#3ede04", "#ffffff")
 				}
+				return m, nil
+			}
+
+			err := sendMessage(webSocket, group, config, text)
+			if err != nil {
+				displayError(err.Error())
+			} else {
+				m.input.Reset()
+				displayMessage("You", text, "#3ede04", "#ffffff")
 			}
 		case tea.KeyEsc:
 			return m, tea.Quit

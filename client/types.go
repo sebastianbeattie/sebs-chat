@@ -17,8 +17,9 @@ type InputMessage struct {
 }
 
 type KeyConfig struct {
-	PrivateKeys  string `json:"privateKeysDir"`
-	ExternalKeys string `json:"externalKeysDir"`
+	PrivateKeys     string `json:"privateKeysDir"`
+	ExternalKeys    string `json:"externalKeysDir"`
+	AutoKeyExchange bool   `json:"autoKeyExchange"`
 }
 
 type ServerConfig struct {
@@ -100,4 +101,10 @@ type JoinLeaveEventContainer struct {
 	EventType string `json:"eventType"`
 	GroupName string `json:"groupName"`
 	UserHash  string `json:"user"`
+}
+
+type KeyExchange struct {
+	KeyFrom string `json:"keyFrom"`
+	KeyTo   string `json:"keyTo"`
+	Key     string `json:"key"`
 }

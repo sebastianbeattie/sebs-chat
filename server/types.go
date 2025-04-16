@@ -104,3 +104,9 @@ type JoinLeaveEvent struct {
 	UserHash  string `json:"user"`
 	EventType string `json:"eventType"` // "join" or "leave"
 }
+
+type KeyExchangeEvent struct {
+	KeyFrom string `json:"keyFrom"`
+	KeyTo   string `json:"keyTo"`
+	Key     string `json:"key"`
+}

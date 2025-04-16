@@ -93,3 +93,15 @@ func getRecipients(groupName string) []*ConnectionMetadata {
 	}
 	return recipients
 }
+
+func getUserConnection(username string) *ConnectionMetadata {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for _, conn := range connections {
+		if conn.Username == username {
+			return conn
+		}
+	}
+	return nil
+}

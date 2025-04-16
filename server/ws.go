@@ -74,6 +74,24 @@ func websocketHandler(c *websocket.Conn) {
 				log.Println("broadcast error:", err)
 				continue
 			}
+		case "key-exchange":
+			keyExchange := &KeyExchangeEvent{}
+			err := json.Unmarshal(messageContainer.Message, keyExchange)
+			if err != nil {
+				log.Println("unmarshal error:", err)
+				continue
+			}
+			targetConnection := getUserConnection(keyExchange.KeyTo)
+			if targetConnection == nil {
+				log.Printf("target user %s not found\n", keyExchange.KeyTo)
+				continue
+			}
+			err = targetConnection.Connection.WriteJSON(messageContainer)
+			if err != nil {
+				log.Printf("write to target user %s error: %v\n", keyExchange.KeyTo, err)
+				continue
+			}
+
 		default:
 			log.Printf("unknown message type: %s\n", messageContainer.MessageType)
 		}

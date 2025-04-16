@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,4 +56,16 @@ func readJson[T any](path string) (T, error) {
 	}
 
 	return result, nil
+}
+
+func writeExternalKey(userId, key string, config Config) error {
+	keyBytes, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return fmt.Errorf("error decoding base64 key: %v", err)
+	}
+	err = saveKeyToFile(fmt.Sprintf("%s/%s/public.key", config.Keys.ExternalKeys, userId), keyBytes)
+	if err != nil {
+		return fmt.Errorf("error saving external key: %v", err)
+	}
+	return nil
 }

@@ -155,12 +155,7 @@ func sendMessage(ws *websocket.Conn, group Group, config Config, message string)
 		Message:     encryptedMessageBytes,
 	}
 
-	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
-	if err != nil {
-		return fmt.Errorf("error marshalling outgoing message: %v", err)
-	}
-
-	err = ws.WriteMessage(websocket.TextMessage, outgoingMessageBytes)
+	err = ws.WriteJSON(outgoingMessage)
 	if err != nil {
 		return fmt.Errorf("error sending message: %v", err)
 	}
@@ -240,11 +235,61 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 					displayMessage("Member Left", fmt.Sprintf("%s left the chat", username), "#f02b60", "#ed8aa4")
 				}
 
+			case "key-exchange":
+				keyExchange := &KeyExchange{}
+				if err = json.Unmarshal(messageContainer.Message, keyExchange); err != nil {
+					displayError(fmt.Sprintf("Malformed key exchange message: %s\nError: %v\n", string(message), err))
+					continue
+				}
+
+				displayMessage("Key Exchange", fmt.Sprintf("Received public key from %s", keyExchange.KeyFrom), "#f0c02b", "#f5e67d")
+
+				err = importPublicKey(*keyExchange, config)
+				if err != nil {
+					displayError(fmt.Sprintf("Error importing public key: %v", err))
+					continue
+				}
+
+				if config.Keys.AutoKeyExchange {
+					err := exchangeKey(ws, keyExchange.KeyFrom)
+					if err != nil {
+						displayError(fmt.Sprintf("Error sending public key: %v", err))
+						continue
+					}
+					displayMessage("Key Exchange", fmt.Sprintf("Sent public key to %s", keyExchange.KeyFrom), "#f0c02b", "#f5e67d")
+				} else {
+					displayWarning(fmt.Sprintf("Auto key exchange is disabled. Please send your public key manually to %s", keyExchange.KeyFrom))
+				}
+
 			default:
 				displayError(fmt.Sprintf("Unknown message type: %s\n", messageContainer.MessageType))
 			}
 		}
 	}
+}
+
+func exchangeKey(ws *websocket.Conn, target string) error {
+	keyExchangeContainer, err := exportPublicKey(config, target)
+	if err != nil {
+		return fmt.Errorf("error exporting public key: %v", err)
+	}
+	keyExchangeContainerBytes, err := json.Marshal(keyExchangeContainer)
+	if err != nil {
+		return fmt.Errorf("error marshalling key exchange container: %v", err)
+	}
+	outgoingMessage := WebSocketMessage{
+		MessageType: "key-exchange",
+		Message:     keyExchangeContainerBytes,
+	}
+	outgoingMessageBytes, err := json.Marshal(outgoingMessage)
+	if err != nil {
+		return fmt.Errorf("error marshalling outgoing message: %v", err)
+	}
+	err = ws.WriteMessage(websocket.TextMessage, outgoingMessageBytes)
+	if err != nil {
+		return fmt.Errorf("error sending key exchange message: %v", err)
+	}
+	return nil
 }
 
 func connectToWebSocket(url string) (*websocket.Conn, error) {
