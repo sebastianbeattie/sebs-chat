@@ -86,6 +86,10 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("message contains no keys")
 	}
 
+	if _, ok := msg.EncryptedKeys[hashedUsername]; !ok {
+		return DecryptedMessage{}, fmt.Errorf("message does not contain key for this user")
+	}
+
 	senderUsername, err := getUsernameFromHash(msg.Sender, config)
 	if err != nil {
 		return DecryptedMessage{}, fmt.Errorf("unable to determine sender's username: %v", err)
