@@ -231,7 +231,8 @@ func listenForMessages(ctx context.Context, cancel context.CancelFunc, ws *webso
 
 				username, err := getUsernameFromHash(joinLeaveEvent.UserHash, config)
 				if err != nil {
-					username = "Unknown User"
+					username = joinLeaveEvent.UserHash
+					displayError(fmt.Sprintf("Error getting username: %v", err))
 				}
 				if joinLeaveEvent.EventType == "join" {
 					displayMessage("Member Joined", fmt.Sprintf("%s joined the chat", username), "#4287f5", "#679df5")
