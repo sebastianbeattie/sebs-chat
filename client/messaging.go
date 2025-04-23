@@ -67,7 +67,7 @@ func connectGroup(group string, config Config) error {
 
 	// Runs the UI. If the user exits or the UI closes, disconnect
 	go listenForMessages(ctx, cancel, ws, config)
-	err = createUi(groupInfo, ws, config)
+	err = createUi(groupInfo, ws)
 	if err != nil {
 		return fmt.Errorf("error with UI: %v", err)
 	}

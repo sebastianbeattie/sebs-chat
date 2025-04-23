@@ -74,7 +74,7 @@ func importPublicKey(keyExchange KeyExchange, config Config) error {
 	if keyExchange.KeyFrom == config.UserID {
 		return fmt.Errorf("cannot import own public key")
 	}
-	if keyExchange.KeyTo != config.UserID {
+	if keyExchange.KeyTo != "" && keyExchange.KeyTo != config.UserID {
 		return fmt.Errorf("key exchange not intended for this user")
 	}
 

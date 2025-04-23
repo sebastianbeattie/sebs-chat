@@ -9,6 +9,8 @@ import (
 	"github.com/alexflint/go-arg"
 )
 
+var config Config
+
 func generateAllKeys(config Config) error {
 	fmt.Println("Generating keys...")
 	err := createKeypair(config.Keys.PrivateKeys)
@@ -27,8 +29,6 @@ func generateAllKeys(config Config) error {
 func main() {
 	arg.MustParse(&args)
 
-	var config Config
-
 	jsonFile, err := os.Open(args.Config)
 	if err != nil {
 		fmt.Println("Error opening config file:", err)
@@ -45,6 +45,7 @@ func main() {
 		fmt.Println("Error reading config file:", err)
 		return
 	}
+
 	err = json.Unmarshal(byteValue, &config)
 	if err != nil {
 		fmt.Println("Error unmarshalling config file:", err)
@@ -56,37 +57,7 @@ func main() {
 		return
 	}
 
-	if _, err := os.Stat(config.Keys.PrivateKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.PrivateKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating private keys directory:", err)
-			return
-		}
-		fmt.Println("Created private keys directory:", config.Keys.PrivateKeys)
-	}
-
-	if _, err := os.Stat(config.Keys.ExternalKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.ExternalKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating external keys directory:", err)
-			return
-		}
-		fmt.Println("Created external keys directory:", config.Keys.PrivateKeys)
-	}
-
-	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
-	if err != nil {
-		fmt.Println("Error reading private keys directory:", err)
-		return
-	}
-	if len(privateKeysDirEntries) == 0 {
-		fmt.Println("Private keys directory is empty, generating keys...")
-		err = generateAllKeys(config)
-		if err != nil {
-			fmt.Println("Error generating keys:", err)
-			return
-		}
-	}
+	createKeyDirsIfNotExist(args.Command != "keygen")
 
 	switch args.Command {
 	case "keygen":
@@ -197,5 +168,39 @@ func main() {
 	default:
 		fmt.Printf("Unsupported command '%s'\n", args.Command)
 		return
+	}
+}
+
+func createKeyDirsIfNotExist(createKeys bool) {
+	if _, err := os.Stat(config.Keys.PrivateKeys); os.IsNotExist(err) {
+		err = os.MkdirAll(config.Keys.PrivateKeys, os.ModePerm)
+		if err != nil {
+			fmt.Println("Error creating private keys directory:", err)
+			return
+		}
+		fmt.Println("Created private keys directory:", config.Keys.PrivateKeys)
+	}
+
+	if _, err := os.Stat(config.Keys.ExternalKeys); os.IsNotExist(err) {
+		err = os.MkdirAll(config.Keys.ExternalKeys, os.ModePerm)
+		if err != nil {
+			fmt.Println("Error creating external keys directory:", err)
+			return
+		}
+		fmt.Println("Created external keys directory:", config.Keys.PrivateKeys)
+	}
+
+	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
+	if err != nil {
+		fmt.Println("Error reading private keys directory:", err)
+		return
+	}
+	if len(privateKeysDirEntries) == 0 && createKeys {
+		fmt.Println("Private keys directory is empty, generating keys...")
+		err = generateAllKeys(config)
+		if err != nil {
+			fmt.Println("Error generating keys:", err)
+			return
+		}
 	}
 }

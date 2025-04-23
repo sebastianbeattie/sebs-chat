@@ -28,7 +28,6 @@ type newMessage struct {
 var (
 	group            Group
 	webSocket        *websocket.Conn
-	config           Config
 	incomingMessages chan tea.Msg
 )
 
@@ -137,10 +136,9 @@ func (m display) View() string {
 	return fmt.Sprintf("%s\n\n%s", m.viewport.View(), m.input.View())
 }
 
-func createUi(g Group, ws *websocket.Conn, c Config) error {
+func createUi(g Group, ws *websocket.Conn) error {
 	group = g
 	webSocket = ws
-	config = c
 
 	incomingMessages = make(chan tea.Msg, 100) // buffered to avoid blocking
 
