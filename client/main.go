@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,9 +83,9 @@ func main() {
 			fmt.Println("Error marshalling encrypted message:", err)
 			return
 		}
-		fmt.Println(string(encryptedMessageBytes))
+		fmt.Println(base64.StdEncoding.EncodeToString(encryptedMessageBytes))
 	case "decrypt":
-		encryptedMessage, err := readJson[EncryptedMessage](args.Input)
+		encryptedMessage, err := readBase64File[EncryptedMessage](args.Input)
 		if err != nil {
 			fmt.Println("Error reading input message:", err)
 			return
@@ -95,49 +96,6 @@ func main() {
 			return
 		}
 		fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
-	case "register":
-		fmt.Println("Registering user...")
-		request := CreateUserRequest{Username: config.UserID}
-		err = createUser(config, request)
-		if err != nil {
-			fmt.Println("Error creating user:", err)
-			return
-		}
-		fmt.Println("User registered successfully.")
-	case "create-group":
-		group, err = createMessageGroup(args.Input, config)
-		if err != nil {
-			fmt.Println("Error creating group:", err)
-			return
-		}
-		fmt.Printf("Created group '%s' successfully!\n", group.GroupName)
-		printGroupInfo(group)
-	case "group-info":
-		group, err = getGroupInfo(args.Group, config)
-		if err != nil {
-			fmt.Println("Error getting group info:", err)
-			return
-		}
-		printGroupInfo(group)
-	case "connect":
-		err = connectGroup(args.Group, config)
-		if err != nil {
-			fmt.Println("Error connecting to group:", err)
-			return
-		}
-	case "list-groups":
-		groups, err := getGroupsContainingMember(config)
-		if err != nil {
-			fmt.Println("Error getting groups list:", err)
-			return
-		}
-		for _, group := range groups {
-			fmt.Println("----------------------")
-			printGroupInfo(group)
-		}
-		fmt.Println("----------------------")
-		fmt.Println("Total groups:", len(groups))
-		fmt.Println("----------------------")
 	case "export-key":
 		KeyExchange, err := exportPublicKey(config, args.Recipient)
 		if err != nil {

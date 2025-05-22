@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
@@ -27,6 +28,11 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		return EncryptedMessage{}, fmt.Errorf("message has no recipients")
 	}
 
+	recipientsWithoutKeys := checkRecipientKeysExist(inputMessage.Recipients, config)
+	if len(recipientsWithoutKeys) > 0 {
+		return EncryptedMessage{}, fmt.Errorf("recipient key not found for %s", strings.Join(recipientsWithoutKeys, ", "))
+	}
+
 	symKey := make([]byte, 32)
 	rand.Read(symKey)
 
@@ -39,6 +45,7 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 	for _, user := range inputMessage.Recipients {
 		pubPath := getUserPublicKey(config.Keys.ExternalKeys, user)
 		pub, err := loadKeyFromFile(pubPath)
+
 		if err != nil {
 			return EncryptedMessage{}, fmt.Errorf("error loading recipient public key: %v", err)
 		}

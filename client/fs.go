@@ -20,21 +20,23 @@ func getUserPublicKey(externalKeysDir, userID string) string {
 	return fmt.Sprintf("%s/%s/public.key", externalKeysDir, userID)
 }
 
-func getAuthToken(config Config) (string, error) {
-	authTokenPath := fmt.Sprintf("%s/auth_token", config.Keys.PrivateKeys)
-	return readTextFromFile(authTokenPath)
-}
+func readBase64File[T any](filename string) (T, error) {
+	var result T
 
-func saveTextToFile(filename string, text string) error {
-	return os.WriteFile(filename, []byte(text), 0600)
-}
-
-func readTextFromFile(filename string) (string, error) {
 	fileContents, err := os.ReadFile(filename)
 	if err != nil {
-		return "", err
+		return result, err
 	}
-	return string(fileContents), nil
+	decoded, err := base64.StdEncoding.DecodeString(string(fileContents))
+	if err != nil {
+		return result, err
+	}
+
+	if err := json.Unmarshal(decoded, &result); err != nil {
+		return result, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return result, nil
 }
 
 func readJson[T any](path string) (T, error) {

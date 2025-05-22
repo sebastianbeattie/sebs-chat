@@ -9,13 +9,13 @@ import (
 )
 
 func checkRecipientKeysExist(recipients []string, config Config) []string {
-	var existingKeys []string
+	var noKeys []string
 	for _, recipient := range recipients {
-		if keyExists(recipient, config) {
-			existingKeys = append(existingKeys, recipient)
+		if !keyExists(recipient, config) {
+			noKeys = append(noKeys, recipient)
 		}
 	}
-	return existingKeys
+	return noKeys
 }
 
 func keyExists(recipient string, config Config) bool {
@@ -32,15 +32,6 @@ func exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
-}
-
-func contains(a []string, b string) bool {
-	for _, c := range a {
-		if c == b {
-			return true
-		}
-	}
-	return false
 }
 
 func getUsernameFromHash(hash string, config Config) (string, error) {
