@@ -9,11 +9,20 @@ import (
 )
 
 func saveKeyToFile(filename string, key []byte) error {
-	return os.WriteFile(filename, key, 0600)
+	keyBase64 := base64.StdEncoding.EncodeToString(key)
+	return os.WriteFile(filename, []byte(keyBase64), 0600)
 }
 
 func loadKeyFromFile(filename string) ([]byte, error) {
-	return os.ReadFile(filename)
+	keyBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error reading key file: %v", err)
+	}
+	key, err := base64.StdEncoding.DecodeString(string(keyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("error decoding base64 key: %v", err)
+	}
+	return key, nil
 }
 
 func getUserPublicKey(externalKeysDir, userID string) string {

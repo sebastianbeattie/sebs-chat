@@ -107,10 +107,10 @@ func main() {
 			fmt.Println("Error marshalling key exchange:", err)
 			return
 		}
-		fmt.Println(string(keyExchangeBytes))
+		fmt.Println(base64.StdEncoding.EncodeToString(keyExchangeBytes))
 		return
 	case "import-key":
-		keyExchange, err := readJson[KeyExchange](args.Input)
+		keyExchange, err := readBase64File[KeyExchange](args.Input)
 		if err != nil {
 			fmt.Println("Error reading key exchange:", err)
 			return
@@ -145,7 +145,7 @@ func createKeyDirsIfNotExist(createKeys bool) {
 			fmt.Println("Error creating external keys directory:", err)
 			return
 		}
-		fmt.Println("Created external keys directory:", config.Keys.PrivateKeys)
+		fmt.Println("Created external keys directory:", config.Keys.ExternalKeys)
 	}
 
 	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
