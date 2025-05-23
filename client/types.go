@@ -31,6 +31,5 @@ type DecryptedMessage struct {
 
 type KeyExchange struct {
 	KeyFrom string `json:"keyFrom"`
-	KeyTo   string `json:"keyTo"`
 	Key     string `json:"key"`
 }

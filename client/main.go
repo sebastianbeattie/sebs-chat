@@ -97,7 +97,7 @@ func main() {
 		}
 		fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
 	case "export-key":
-		KeyExchange, err := exportPublicKey(config, args.Recipient)
+		KeyExchange, err := exportPublicKey(config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error exporting public key: %v\n", err)
 			return
