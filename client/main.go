@@ -32,29 +32,29 @@ func main() {
 
 	jsonFile, err := os.Open(args.Config)
 	if err != nil {
-		fmt.Println("Error opening config file:", err)
+		fmt.Fprintf(os.Stderr, "Error opening config file: %v\n", err)
 		return
 	}
 	defer func(jsonFile *os.File) {
 		err := jsonFile.Close()
 		if err != nil {
-			fmt.Println("Error closing config file:", err)
+			fmt.Fprintf(os.Stderr, "Error closing config file: %v\n", err)
 		}
 	}(jsonFile)
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("Error reading config file:", err)
+		fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
 		return
 	}
 
 	err = json.Unmarshal(byteValue, &config)
 	if err != nil {
-		fmt.Println("Error unmarshalling config file:", err)
+		fmt.Fprintf(os.Stderr, "Error unmarshalling config file: %v\n", err)
 		return
 	}
 
 	if args.Command == "" {
-		fmt.Println("No command provided")
+		fmt.Fprintf(os.Stderr, "No command provided")
 		return
 	}
 
@@ -64,47 +64,47 @@ func main() {
 	case "keygen":
 		err := generateAllKeys(config)
 		if err != nil {
-			fmt.Println("Error generating keys:", err)
+			fmt.Fprintf(os.Stderr, "Error generating keys: %v\n", err)
 			return
 		}
 	case "encrypt":
 		inputMessage, err := readJson[InputMessage](args.Input)
 		if err != nil {
-			fmt.Println("Error reading input message:", err)
+			fmt.Fprintf(os.Stderr, "Error reading input message: %v\n", err)
 			return
 		}
 		encryptedMessage, err := encrypt(inputMessage, config)
 		if err != nil {
-			fmt.Println("Error encrypting message:", err)
+			fmt.Fprintf(os.Stderr, "Error encrypting message: %v\n", err)
 			return
 		}
 		encryptedMessageBytes, err := json.MarshalIndent(encryptedMessage, "", "   ")
 		if err != nil {
-			fmt.Println("Error marshalling encrypted message:", err)
+			fmt.Fprintf(os.Stderr, "Error marshalling encrypted message: %v\n", err)
 			return
 		}
 		fmt.Println(base64.StdEncoding.EncodeToString(encryptedMessageBytes))
 	case "decrypt":
 		encryptedMessage, err := readBase64File[EncryptedMessage](args.Input)
 		if err != nil {
-			fmt.Println("Error reading input message:", err)
+			fmt.Fprintf(os.Stderr, "Error reading input message: %v\n", err)
 			return
 		}
 		decryptedMessage, err := decrypt(encryptedMessage, config)
 		if err != nil {
-			fmt.Println("Error decrypting message:", err)
+			fmt.Fprintf(os.Stderr, "Error decrypting message: %v\n", err)
 			return
 		}
 		fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
 	case "export-key":
 		KeyExchange, err := exportPublicKey(config, args.Recipient)
 		if err != nil {
-			fmt.Println("Error exporting public key:", err)
+			fmt.Fprintf(os.Stderr, "Error exporting public key: %v\n", err)
 			return
 		}
 		keyExchangeBytes, err := json.MarshalIndent(KeyExchange, "", "   ")
 		if err != nil {
-			fmt.Println("Error marshalling key exchange:", err)
+			fmt.Fprintf(os.Stderr, "Error marshalling key exchange: %v\n", err)
 			return
 		}
 		fmt.Println(base64.StdEncoding.EncodeToString(keyExchangeBytes))
@@ -112,19 +112,19 @@ func main() {
 	case "import-key":
 		keyExchange, err := readBase64File[KeyExchange](args.Input)
 		if err != nil {
-			fmt.Println("Error reading key exchange:", err)
+			fmt.Fprintf(os.Stderr, "Error reading key exchange: %v\n", err)
 			return
 		}
 		err = importPublicKey(keyExchange, config)
 		if err != nil {
-			fmt.Println("Error importing public key:", err)
+			fmt.Fprintf(os.Stderr, "Error importing public key: %v\n", err)
 			return
 		}
 		fmt.Printf("Public key imported from %s successfully\n", keyExchange.KeyFrom)
 		return
 
 	default:
-		fmt.Printf("Unsupported command '%s'\n", args.Command)
+		fmt.Fprintf(os.Stderr, "Unsupported command '%s'\n", args.Command)
 		return
 	}
 }
