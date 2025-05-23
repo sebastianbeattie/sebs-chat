@@ -7,10 +7,14 @@ import (
 	"io"
 	"os"
 
-	"github.com/alexflint/go-arg"
+	"github.com/spf13/cobra"
 )
 
-var config Config
+var (
+	config     Config
+	configPath string
+	inputPath  string
+)
 
 func generateAllKeys(config Config) error {
 	fmt.Println("Generating keys...")
@@ -25,108 +29,6 @@ func generateAllKeys(config Config) error {
 	}
 	fmt.Println("Ed25519 signing key pair saved")
 	return nil
-}
-
-func main() {
-	arg.MustParse(&args)
-
-	jsonFile, err := os.Open(args.Config)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening config file: %v\n", err)
-		return
-	}
-	defer func(jsonFile *os.File) {
-		err := jsonFile.Close()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error closing config file: %v\n", err)
-		}
-	}(jsonFile)
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
-		return
-	}
-
-	err = json.Unmarshal(byteValue, &config)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error unmarshalling config file: %v\n", err)
-		return
-	}
-
-	if args.Command == "" {
-		fmt.Fprintf(os.Stderr, "No command provided")
-		return
-	}
-
-	createKeyDirsIfNotExist(args.Command != "keygen")
-
-	switch args.Command {
-	case "keygen":
-		err := generateAllKeys(config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error generating keys: %v\n", err)
-			return
-		}
-	case "encrypt":
-		inputMessage, err := readJson[InputMessage](args.Input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input message: %v\n", err)
-			return
-		}
-		encryptedMessage, err := encrypt(inputMessage, config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encrypting message: %v\n", err)
-			return
-		}
-		encryptedMessageBytes, err := json.MarshalIndent(encryptedMessage, "", "   ")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling encrypted message: %v\n", err)
-			return
-		}
-		fmt.Println(base64.StdEncoding.EncodeToString(encryptedMessageBytes))
-	case "decrypt":
-		encryptedMessage, err := readBase64File[EncryptedMessage](args.Input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input message: %v\n", err)
-			return
-		}
-		decryptedMessage, err := decrypt(encryptedMessage, config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error decrypting message: %v\n", err)
-			return
-		}
-		fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
-	case "export-key":
-		KeyExchange, err := exportPublicKey(config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error exporting public key: %v\n", err)
-			return
-		}
-		keyExchangeBytes, err := json.MarshalIndent(KeyExchange, "", "   ")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling key exchange: %v\n", err)
-			return
-		}
-		fmt.Println(base64.StdEncoding.EncodeToString(keyExchangeBytes))
-		return
-	case "import-key":
-		keyExchange, err := readBase64File[KeyExchange](args.Input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading key exchange: %v\n", err)
-			return
-		}
-		err = importPublicKey(keyExchange, config)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error importing public key: %v\n", err)
-			return
-		}
-		fmt.Printf("Public key imported from %s successfully\n", keyExchange.KeyFrom)
-		return
-
-	default:
-		fmt.Fprintf(os.Stderr, "Unsupported command '%s'\n", args.Command)
-		return
-	}
 }
 
 func createKeyDirsIfNotExist(createKeys bool) {
@@ -160,5 +62,128 @@ func createKeyDirsIfNotExist(createKeys bool) {
 			fmt.Println("Error generating keys:", err)
 			return
 		}
+	}
+}
+
+func main() {
+	rootCmd := &cobra.Command{
+		Use:   "sebs-chat",
+		Short: "A CLI tool for encryption/decryption and key management",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Load config before any subcommand runs
+			file, err := os.Open(configPath)
+			if err != nil {
+				return fmt.Errorf("error opening config file: %v", err)
+			}
+			defer file.Close()
+			byteValue, err := io.ReadAll(file)
+			if err != nil {
+				return fmt.Errorf("error reading config file: %v", err)
+			}
+			err = json.Unmarshal(byteValue, &config)
+			if err != nil {
+				return fmt.Errorf("error unmarshalling config: %v", err)
+			}
+			return nil
+		},
+	}
+
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "config.json", "Path to config file")
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "keygen",
+		Short: "Generate key pairs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			createKeyDirsIfNotExist(false)
+			return generateAllKeys(config)
+		},
+	})
+
+	encryptCmd := &cobra.Command{
+		Use:   "encrypt",
+		Short: "Encrypt a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			createKeyDirsIfNotExist(true)
+			inputMessage, err := readJson[InputMessage](inputPath)
+			if err != nil {
+				return fmt.Errorf("error reading input message: %v", err)
+			}
+			encryptedMessage, err := encrypt(inputMessage, config)
+			if err != nil {
+				return fmt.Errorf("error encrypting message: %v", err)
+			}
+			output, err := json.MarshalIndent(encryptedMessage, "", "   ")
+			if err != nil {
+				return fmt.Errorf("error marshalling encrypted message: %v", err)
+			}
+			fmt.Println(base64.StdEncoding.EncodeToString(output))
+			return nil
+		},
+	}
+	encryptCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input JSON file")
+	encryptCmd.MarkFlagRequired("input")
+	rootCmd.AddCommand(encryptCmd)
+
+	decryptCmd := &cobra.Command{
+		Use:   "decrypt",
+		Short: "Decrypt a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			createKeyDirsIfNotExist(true)
+			encryptedMessage, err := readBase64File[EncryptedMessage](inputPath)
+			if err != nil {
+				return fmt.Errorf("error reading encrypted message: %v", err)
+			}
+			decryptedMessage, err := decrypt(encryptedMessage, config)
+			if err != nil {
+				return fmt.Errorf("error decrypting message: %v", err)
+			}
+			fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
+			return nil
+		},
+	}
+	decryptCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input file")
+	decryptCmd.MarkFlagRequired("input")
+	rootCmd.AddCommand(decryptCmd)
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "export-key",
+		Short: "Export your public key",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyExchange, err := exportPublicKey(config)
+			if err != nil {
+				return fmt.Errorf("error exporting public key: %v", err)
+			}
+			output, err := json.MarshalIndent(keyExchange, "", "   ")
+			if err != nil {
+				return fmt.Errorf("error marshalling key exchange: %v", err)
+			}
+			fmt.Println(base64.StdEncoding.EncodeToString(output))
+			return nil
+		},
+	})
+
+	importCmd := &cobra.Command{
+		Use:   "import-key",
+		Short: "Import a public key",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyExchange, err := readBase64File[KeyExchange](inputPath)
+			if err != nil {
+				return fmt.Errorf("error reading key exchange: %v", err)
+			}
+			err = importPublicKey(keyExchange, config)
+			if err != nil {
+				return fmt.Errorf("error importing public key: %v", err)
+			}
+			fmt.Printf("Public key imported from %s successfully\n", keyExchange.KeyFrom)
+			return nil
+		},
+	}
+	importCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input file")
+	importCmd.MarkFlagRequired("input")
+	rootCmd.AddCommand(importCmd)
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
