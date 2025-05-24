@@ -16,55 +16,6 @@ var (
 	inputPath  string
 )
 
-func generateAllKeys(config Config) error {
-	fmt.Println("Generating keys...")
-	err := createKeypair(config.Keys.PrivateKeys)
-	if err != nil {
-		return fmt.Errorf("error generating key pair: %v", err)
-	}
-	fmt.Println("X25519 key pair saved")
-	err = createSigningKeypair(config.Keys.PrivateKeys)
-	if err != nil {
-		return fmt.Errorf("error generating signing key pair: %v", err)
-	}
-	fmt.Println("Ed25519 signing key pair saved")
-	return nil
-}
-
-func createKeyDirsIfNotExist(createKeys bool) {
-	if _, err := os.Stat(config.Keys.PrivateKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.PrivateKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating private keys directory:", err)
-			return
-		}
-		fmt.Println("Created private keys directory:", config.Keys.PrivateKeys)
-	}
-
-	if _, err := os.Stat(config.Keys.ExternalKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.ExternalKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating external keys directory:", err)
-			return
-		}
-		fmt.Println("Created external keys directory:", config.Keys.ExternalKeys)
-	}
-
-	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
-	if err != nil {
-		fmt.Println("Error reading private keys directory:", err)
-		return
-	}
-	if len(privateKeysDirEntries) == 0 && createKeys {
-		fmt.Println("Private keys directory is empty, generating keys...")
-		err = generateAllKeys(config)
-		if err != nil {
-			fmt.Println("Error generating keys:", err)
-			return
-		}
-	}
-}
-
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "sebs-chat",
