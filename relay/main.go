@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -18,6 +17,15 @@ type Config struct {
 	MaxUsers    int    `json:"maxUsers"`
 }
 
+type UserList struct {
+	Users []string `json:"users"`
+}
+
+type RelayTransport struct {
+	Type    string `json:"t"`
+	Payload string `json:"p"`
+}
+
 type ClientMap struct {
 	sync.RWMutex
 	Sessions map[string]*websocket.Conn
@@ -27,11 +35,9 @@ var config Config
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // allow all origins (for demo purposes)
+		return true // allow all origins
 	},
 }
-
-var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9]{1,32}$`)
 
 // Manage connected clients
 var clients = ClientMap{
@@ -39,9 +45,9 @@ var clients = ClientMap{
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
-	username := r.URL.Query().Get("username")
-	if !usernameRegex.MatchString(username) {
-		http.Error(w, "Invalid or missing username. Must be alphanumeric and 1-32 characters.", http.StatusBadRequest)
+	username := r.URL.Query().Get("user_id")
+	if username == "" {
+		http.Error(w, "Missing user_id.", http.StatusBadRequest)
 		return
 	}
 
@@ -76,37 +82,46 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-				// Don't log normal close errors
 				break
 			}
 			log.Printf("Read error for '%s': %v\n", username, err)
 			break
 		}
-		log.Printf("Received from '%s': %s\n", username, message)
-		// Echo message back
-		err = conn.WriteMessage(websocket.TextMessage, message)
+
+		transport := RelayTransport{}
+		err = json.Unmarshal(message, &transport)
 		if err != nil {
-			log.Printf("Write error for '%s': %v\n", username, err)
-			break
+			log.Printf("Error unmarshalling message from '%s': %v\n", username, err)
+			continue
+		}
+
+		log.Printf("Received %s from %s\n", transport.Type, username)
+
+		switch transport.Type {
+		case "msg":
+			forwardEncryptedMessage(message, username)
+		default:
+			log.Printf("Unknown message type '%s' from '%s'\n", transport.Type, username)
+			continue
 		}
 	}
 }
 
-// Send a message to a list of users
-func sendMessageToUsers(usernames []string, message string) {
+func forwardEncryptedMessage(message []byte, author string) {
 	clients.RLock()
 	defer clients.RUnlock()
-	for _, username := range usernames {
-		if conn, ok := clients.Sessions[username]; ok {
-			err := conn.WriteMessage(websocket.TextMessage, []byte(message))
-			if err != nil {
-				log.Printf("Error sending message to '%s': %v\n", username, err)
-			} else {
-				log.Printf("Sent message to '%s'\n", username)
-			}
-		} else {
-			log.Printf("User '%s' not connected\n", username)
+	for userID, conn := range clients.Sessions {
+		// Skip the author of the message
+		if userID == author {
+			continue
 		}
+
+		err := conn.WriteMessage(websocket.TextMessage, message)
+		if err != nil {
+			log.Printf("Error sending message to '%s': %v\n", userID, err)
+			continue
+		}
+		log.Printf("Forwarded message to '%s'\n", userID)
 	}
 }
 
@@ -120,13 +135,29 @@ func loadConfig(path string) error {
 	return decoder.Decode(&config)
 }
 
+func listUsersHandler(w http.ResponseWriter, r *http.Request) {
+	clients.RLock()
+	userIDs := make([]string, 0, len(clients.Sessions))
+	for userID := range clients.Sessions {
+		userIDs = append(userIDs, userID)
+	}
+	clients.RUnlock()
+
+	userList := UserList{Users: userIDs}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(userList)
+}
+
 func main() {
 	err := loadConfig("config.json")
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
-	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/api/list-users", listUsersHandler)
+	http.HandleFunc("/relay", wsHandler)
+
 	address := fmt.Sprintf("%s:%d", config.BindAddress, config.Port)
 	log.Printf("WebSocket server starting on %s\n", address)
 	err = http.ListenAndServe(address, nil)
