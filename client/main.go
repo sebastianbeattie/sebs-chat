@@ -14,56 +14,8 @@ var (
 	config     Config
 	configPath string
 	inputPath  string
+	outputPath string
 )
-
-func generateAllKeys(config Config) error {
-	fmt.Println("Generating keys...")
-	err := createKeypair(config.Keys.PrivateKeys)
-	if err != nil {
-		return fmt.Errorf("error generating key pair: %v", err)
-	}
-	fmt.Println("X25519 key pair saved")
-	err = createSigningKeypair(config.Keys.PrivateKeys)
-	if err != nil {
-		return fmt.Errorf("error generating signing key pair: %v", err)
-	}
-	fmt.Println("Ed25519 signing key pair saved")
-	return nil
-}
-
-func createKeyDirsIfNotExist(createKeys bool) {
-	if _, err := os.Stat(config.Keys.PrivateKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.PrivateKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating private keys directory:", err)
-			return
-		}
-		fmt.Println("Created private keys directory:", config.Keys.PrivateKeys)
-	}
-
-	if _, err := os.Stat(config.Keys.ExternalKeys); os.IsNotExist(err) {
-		err = os.MkdirAll(config.Keys.ExternalKeys, os.ModePerm)
-		if err != nil {
-			fmt.Println("Error creating external keys directory:", err)
-			return
-		}
-		fmt.Println("Created external keys directory:", config.Keys.ExternalKeys)
-	}
-
-	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
-	if err != nil {
-		fmt.Println("Error reading private keys directory:", err)
-		return
-	}
-	if len(privateKeysDirEntries) == 0 && createKeys {
-		fmt.Println("Private keys directory is empty, generating keys...")
-		err = generateAllKeys(config)
-		if err != nil {
-			fmt.Println("Error generating keys:", err)
-			return
-		}
-	}
-}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -116,11 +68,11 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("error marshalling encrypted message: %v", err)
 			}
-			fmt.Println(base64.StdEncoding.EncodeToString(output))
-			return nil
+			return writeOutput(base64.StdEncoding.EncodeToString(output))
 		},
 	}
 	encryptCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input JSON file")
+	encryptCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output file (optional)")
 	encryptCmd.MarkFlagRequired("input")
 	rootCmd.AddCommand(encryptCmd)
 
@@ -137,15 +89,16 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("error decrypting message: %v", err)
 			}
-			fmt.Printf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
-			return nil
+			output := fmt.Sprintf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
+			return writeOutput(output)
 		},
 	}
 	decryptCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input file")
+	decryptCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output file (optional)")
 	decryptCmd.MarkFlagRequired("input")
 	rootCmd.AddCommand(decryptCmd)
 
-	rootCmd.AddCommand(&cobra.Command{
+	exportCmd := &cobra.Command{
 		Use:   "export-key",
 		Short: "Export your public key",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -157,10 +110,11 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("error marshalling key exchange: %v", err)
 			}
-			fmt.Println(base64.StdEncoding.EncodeToString(output))
-			return nil
+			return writeOutput(base64.StdEncoding.EncodeToString(output))
 		},
-	})
+	}
+	exportCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output file (optional)")
+	rootCmd.AddCommand(exportCmd)
 
 	importCmd := &cobra.Command{
 		Use:   "import-key",
@@ -179,6 +133,7 @@ func main() {
 		},
 	}
 	importCmd.Flags().StringVarP(&inputPath, "input", "i", "", "Path to input file")
+	importCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output file (optional)")
 	importCmd.MarkFlagRequired("input")
 	rootCmd.AddCommand(importCmd)
 
@@ -195,4 +150,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func writeOutput(output string) error {
+	if outputPath != "" {
+		return os.WriteFile(outputPath, []byte(output), 0644)
+	}
+	fmt.Println(output)
+	return nil
 }
