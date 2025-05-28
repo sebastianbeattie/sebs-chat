@@ -182,6 +182,15 @@ func main() {
 	importCmd.MarkFlagRequired("input")
 	rootCmd.AddCommand(importCmd)
 
+	connectCmd := &cobra.Command{
+		Use:   "connect",
+		Short: "Connect to a relay",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return connectToRelay()
+		},
+	}
+	rootCmd.AddCommand(connectCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -19,9 +19,16 @@ type KeyConfig struct {
 	ExternalKeys string `json:"externalKeysDir"`
 }
 
+type Relay struct {
+	Address  string   `json:"address"`
+	SafeList []string `json:"safeList"`
+	UseTls   bool     `json:"useTls"`
+}
+
 type Config struct {
 	UserID string    `json:"userId"`
 	Keys   KeyConfig `json:"keyConfig"`
+	Relay  Relay     `json:"relay"`
 }
 
 type DecryptedMessage struct {
@@ -32,4 +39,15 @@ type DecryptedMessage struct {
 type KeyExchange struct {
 	KeyFrom string `json:"keyFrom"`
 	Key     string `json:"key"`
+}
+
+// Relay-specific structs
+
+type RelayTransport struct {
+	Type    string `json:"t"`
+	Payload string `json:"p"`
+}
+
+type UserList struct {
+	Users []string `json:"users"`
 }
