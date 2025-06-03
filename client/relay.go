@@ -5,10 +5,101 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"sync"
 
 	"github.com/fasthttp/websocket"
 )
+
+var (
+	upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
+		return true // allow all origins
+	}}
+	clients = make(map[*websocket.Conn]bool)
+	mu      sync.Mutex
+	wsRelay *websocket.Conn
+)
+
+func connectToRelay() error {
+	go startLocalWebSocketServer()
+	wsRelay, err := connectToWebSocket(createWebsocketUrl(config.Relay, config.UserID))
+	if err != nil {
+		return fmt.Errorf("error connecting to relay websocket: %v", err)
+	}
+	defer disconnectWebSocket(wsRelay)
+
+	log.Println("Connected to relay as", config.UserID)
+
+	for {
+		var relayMsg RelayTransport
+		err := wsRelay.ReadJSON(&relayMsg)
+		if err != nil {
+			log.Printf("Error reading message: %v\n", err)
+			break
+		}
+
+		switch relayMsg.Type {
+		case "msg":
+			username, message, err := handleIncomingMessage(relayMsg)
+			if err != nil {
+				log.Printf("Error handling incoming message: %v\n", err)
+				continue
+			}
+			broadcastToLocalClients(fmt.Sprintf("%s: %s", username, message))
+		default:
+			log.Printf("Unknown message type '%s' received\n", relayMsg.Type)
+		}
+	}
+	return nil
+}
+
+func broadcastToLocalClients(msg string) {
+	mu.Lock()
+	defer mu.Unlock()
+	for client := range clients {
+		err := client.WriteMessage(websocket.TextMessage, []byte(msg))
+		if err != nil {
+			log.Printf("Error broadcasting to client: %v\n", err)
+			client.Close()
+			delete(clients, client)
+		}
+	}
+}
+
+func startLocalWebSocketServer() {
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("WebSocket upgrade failed: %v\n", err)
+			return
+		}
+		defer conn.Close()
+
+		mu.Lock()
+		clients[conn] = true
+		mu.Unlock()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				mu.Lock()
+				delete(clients, conn)
+				mu.Unlock()
+				log.Printf("Error reading from client: %v\n", err)
+				break
+			}
+
+			err = sendMessage(wsRelay, config, string(msg))
+			if err != nil {
+				log.Printf("Error sending to relay: %v\n", err)
+			}
+		}
+	})
+
+	log.Println("Local WebSocket server started on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
 
 func createWebsocketUrl(relay Relay, userId string) string {
 	url := "ws"
@@ -28,59 +119,6 @@ func createHttpUrl(relay Relay) string {
 
 	url += "://" + relay.Address
 	return url
-}
-
-func connectToRelay() error {
-	ws, err := connectToWebSocket(createWebsocketUrl(config.Relay, config.UserID))
-	if err != nil {
-		return fmt.Errorf("error connecting to relay websocket: %v", err)
-	}
-	defer disconnectWebSocket(ws)
-
-	fmt.Println("Connected as", config.UserID)
-
-	// Goroutine for sending messages
-	go func() {
-		for {
-			var message string
-			fmt.Print("> ")
-			_, err := fmt.Scanln(&message)
-			if err != nil {
-				fmt.Printf("Error reading input: %v\n", err)
-				continue
-			}
-			if message == "" {
-				continue
-			}
-			if err := sendMessage(ws, config, message); err != nil {
-				fmt.Printf("Error sending message: %v\n", err)
-			}
-		}
-	}()
-
-	// Main goroutine listens for incoming messages
-	for {
-		var relayMsg RelayTransport
-		err := ws.ReadJSON(&relayMsg)
-		if err != nil {
-			fmt.Printf("Error reading message: %v\n", err)
-			break
-		}
-
-		switch relayMsg.Type {
-		case "msg":
-			username, message, err := handleIncomingMessage(relayMsg)
-			if err != nil {
-				fmt.Printf("Error handling incoming message: %v\n", err)
-			}
-			fmt.Printf("%s: %s\n", username, message)
-		default:
-			fmt.Printf("Unknown message type '%s' received\n", relayMsg.Type)
-			continue
-		}
-	}
-
-	return nil
 }
 
 func handleIncomingMessage(relayMsg RelayTransport) (string, string, error) {
