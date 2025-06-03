@@ -212,9 +212,6 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 				if object.Content == "" {
 					return DecryptedMessage{}, fmt.Errorf("text object content cannot be empty")
 				}
-				if *object.FileName != "" {
-					return DecryptedMessage{}, fmt.Errorf("text object cannot have a file path")
-				}
 
 				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
 				if err != nil {
@@ -255,11 +252,8 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 			}
 		case "file":
 			{
-				if *object.FileName == "" {
+				if object.FileName == nil {
 					return DecryptedMessage{}, fmt.Errorf("file object name cannot be empty")
-				}
-				if object.Content != "" {
-					return DecryptedMessage{}, fmt.Errorf("file object cannot have content")
 				}
 
 				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
