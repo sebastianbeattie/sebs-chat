@@ -89,7 +89,17 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("error decrypting message: %v", err)
 			}
-			output := fmt.Sprintf("%s: %s\n", decryptedMessage.Author, decryptedMessage.RawText)
+
+			output := fmt.Sprintf("Decrypted message from %s:\n", decryptedMessage.Author)
+
+			for _, object := range decryptedMessage.Objects {
+				switch object.Type {
+				case "text":
+					output += fmt.Sprintf("Text: %s\n", object.Content)
+				default:
+					return fmt.Errorf("unsupported message object type: %s", object.Type)
+				}
+			}
 			return writeOutput(output)
 		},
 	}
@@ -136,15 +146,6 @@ func main() {
 	importCmd.Flags().StringVarP(&outputPath, "output", "o", "", "Path to output file (optional)")
 	importCmd.MarkFlagRequired("input")
 	rootCmd.AddCommand(importCmd)
-
-	connectCmd := &cobra.Command{
-		Use:   "connect",
-		Short: "Connect to a relay",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return connectToRelay()
-		},
-	}
-	rootCmd.AddCommand(connectCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

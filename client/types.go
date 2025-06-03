@@ -1,17 +1,27 @@
 package main
 
+type MessageObject struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+type EncryptedMessageObject struct {
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Verify    string `json:"verify"`
+	Signature string `json:"signature"`
+}
+
 type EncryptedMessage struct {
-	Ciphertext       string            `json:"ciphertext"`
-	Verify           string            `json:"verify"`
-	EncryptedKeys    map[string]string `json:"encryptedKeys"`
-	Signature        string            `json:"signature"`
-	SigningPublicKey string            `json:"signingPublicKey"`
-	Sender           string            `json:"sender"`
+	Objects          []EncryptedMessageObject `json:"objects"`
+	EncryptedKeys    map[string]string        `json:"encryptedKeys"`
+	SigningPublicKey string                   `json:"signingPublicKey"`
+	Sender           string                   `json:"sender"`
 }
 
 type InputMessage struct {
-	RawText    string   `json:"rawText"`
-	Recipients []string `json:"recipients"`
+	Objects    []MessageObject `json:"objects"`
+	Recipients []string        `json:"recipients"`
 }
 
 type KeyConfig struct {
@@ -32,8 +42,8 @@ type Config struct {
 }
 
 type DecryptedMessage struct {
-	RawText string `json:"rawText"`
-	Author  string `json:"author"`
+	Objects []MessageObject `json:"object"`
+	Author  string          `json:"author"`
 }
 
 type KeyExchange struct {

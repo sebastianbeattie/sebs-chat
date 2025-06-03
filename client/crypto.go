@@ -36,9 +36,34 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 	symKey := make([]byte, 32)
 	rand.Read(symKey)
 
-	ciphertext, nonce, err := encryptSymmetric([]byte(inputMessage.RawText), symKey)
-	if err != nil {
-		return EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
+	var messageObjects []EncryptedMessageObject
+
+	for _, object := range inputMessage.Objects {
+		switch object.Type {
+		case "text":
+			{
+				ciphertext, nonce, err := encryptSymmetric([]byte(object.Content), symKey)
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
+				}
+
+				sig, err := signMessage(ciphertext, fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys))
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
+				}
+
+				messageObjects = append(messageObjects, EncryptedMessageObject{
+					Type:      object.Type,
+					Content:   base64.StdEncoding.EncodeToString(ciphertext),
+					Verify:    base64.StdEncoding.EncodeToString(nonce),
+					Signature: base64.StdEncoding.EncodeToString(sig),
+				})
+			}
+		default:
+			{
+				return EncryptedMessage{}, fmt.Errorf("unsupported message object type: %s", object.Type)
+			}
+		}
 	}
 
 	encryptedKeys := make(map[string]string)
@@ -62,21 +87,14 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		encryptedKeys[userHash] = base64.StdEncoding.EncodeToString(append(encNonce, encKey...))
 	}
 
-	sig, err := signMessage(ciphertext, fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys))
-	if err != nil {
-		return EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
-	}
-
 	signingPub, err := loadKeyFromFile(fmt.Sprintf("%s/signing_public.key", config.Keys.PrivateKeys))
 	if err != nil {
 		return EncryptedMessage{}, fmt.Errorf("error loading signing public key: %v", err)
 	}
 
 	outputMsg := EncryptedMessage{
-		Ciphertext:       base64.StdEncoding.EncodeToString(ciphertext),
-		Verify:           base64.StdEncoding.EncodeToString(nonce),
+		Objects:          messageObjects,
 		EncryptedKeys:    encryptedKeys,
-		Signature:        base64.StdEncoding.EncodeToString(sig),
 		SigningPublicKey: base64.StdEncoding.EncodeToString(signingPub),
 		Sender:           hashString(config.UserID),
 	}
@@ -130,41 +148,59 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		return DecryptedMessage{}, fmt.Errorf("error decrypting symmetric key: %v", err)
 	}
 
-	nonce, err := base64.StdEncoding.DecodeString(msg.Verify)
-	if err != nil {
-		return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
+	var decryptedObjects []MessageObject
+
+	for _, object := range msg.Objects {
+		switch object.Type {
+		case "text":
+			{
+				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
+				}
+
+				ciphertext, err := base64.StdEncoding.DecodeString(object.Content)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding ciphertext: %v", err)
+				}
+
+				sig, err := base64.StdEncoding.DecodeString(object.Signature)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
+				}
+
+				signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
+				}
+
+				if !ed25519.Verify(signingPub, ciphertext, sig) {
+					return DecryptedMessage{}, fmt.Errorf("signature verification failed")
+				}
+
+				plaintext, err := decryptSymmetric(ciphertext, symKey, nonce)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
+				}
+
+				decryptedObject := MessageObject{
+					Type:    object.Type,
+					Content: string(plaintext),
+				}
+
+				decryptedObjects = append(decryptedObjects, decryptedObject)
+			}
+		default:
+			{
+				return DecryptedMessage{}, fmt.Errorf("unsupported message object type: %s", object.Type)
+			}
+		}
 	}
 
-	ciphertext, err := base64.StdEncoding.DecodeString(msg.Ciphertext)
-	if err != nil {
-		return DecryptedMessage{}, fmt.Errorf("error decoding ciphertext: %v", err)
-	}
-
-	sig, err := base64.StdEncoding.DecodeString(msg.Signature)
-	if err != nil {
-		return DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
-	}
-
-	signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
-	if err != nil {
-		return DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
-	}
-
-	if !ed25519.Verify(signingPub, ciphertext, sig) {
-		return DecryptedMessage{}, fmt.Errorf("signature verification failed")
-	}
-
-	plaintext, err := decryptSymmetric(ciphertext, symKey, nonce)
-	if err != nil {
-		return DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
-	}
-
-	decryptedMessage := DecryptedMessage{
-		RawText: string(plaintext),
+	return DecryptedMessage{
+		Objects: decryptedObjects,
 		Author:  senderUsername,
-	}
-
-	return decryptedMessage, nil
+	}, nil
 }
 
 func generateX25519KeyPair() ([]byte, []byte, error) {
