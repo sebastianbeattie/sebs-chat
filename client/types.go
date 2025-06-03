@@ -1,15 +1,17 @@
 package main
 
 type MessageObject struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+	Type     string  `json:"type"`
+	Content  *string `json:"content,omitempty"`
+	FilePath *string `json:"filePath,omitempty"`
 }
 
 type EncryptedMessageObject struct {
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	Verify    string `json:"verify"`
-	Signature string `json:"signature"`
+	Type      string  `json:"type"`
+	Content   string  `json:"content"`
+	FileName  *string `json:"fileName,omitempty"`
+	Verify    string  `json:"verify"`
+	Signature string  `json:"signature"`
 }
 
 type EncryptedMessage struct {
@@ -29,16 +31,10 @@ type KeyConfig struct {
 	ExternalKeys string `json:"externalKeysDir"`
 }
 
-type Relay struct {
-	Address  string   `json:"address"`
-	SafeList []string `json:"safeList"`
-	UseTls   bool     `json:"useTls"`
-}
-
 type Config struct {
-	UserID string    `json:"userId"`
-	Keys   KeyConfig `json:"keyConfig"`
-	Relay  Relay     `json:"relay"`
+	UserID    string    `json:"userId"`
+	Keys      KeyConfig `json:"keyConfig"`
+	FileStore string    `json:"fileStore"`
 }
 
 type DecryptedMessage struct {
@@ -49,15 +45,4 @@ type DecryptedMessage struct {
 type KeyExchange struct {
 	KeyFrom string `json:"keyFrom"`
 	Key     string `json:"key"`
-}
-
-// Relay-specific structs
-
-type RelayTransport struct {
-	Type    string `json:"t"`
-	Payload string `json:"p"`
-}
-
-type UserList struct {
-	Users []string `json:"users"`
 }

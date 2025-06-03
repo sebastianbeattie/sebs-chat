@@ -42,6 +42,15 @@ func createKeyDirsIfNotExist(createKeys bool) {
 		fmt.Println("Created external keys directory:", config.Keys.ExternalKeys)
 	}
 
+	if _, err := os.Stat(config.FileStore); os.IsNotExist(err) {
+		err = os.MkdirAll(config.FileStore, os.ModePerm)
+		if err != nil {
+			fmt.Println("Error creating file store directory:", err)
+			return
+		}
+		fmt.Println("Created file store directory:", config.FileStore)
+	}
+
 	privateKeysDirEntries, err := os.ReadDir(config.Keys.PrivateKeys)
 	if err != nil {
 		fmt.Println("Error reading private keys directory:", err)
@@ -70,21 +79,6 @@ func checkRecipientKeysExist(recipients []string, config Config) []string {
 func keyExists(recipient string, config Config) bool {
 	fileExists, _ := exists(config.Keys.ExternalKeys + "/" + recipient + "/public.key")
 	return fileExists
-}
-
-func listKeys(config Config) ([]string, error) {
-	files, err := os.ReadDir(config.Keys.ExternalKeys)
-	if err != nil {
-		return nil, fmt.Errorf("error reading external keys directory: %v", err)
-	}
-
-	var keys []string
-	for _, file := range files {
-		if file.IsDir() {
-			keys = append(keys, file.Name())
-		}
-	}
-	return keys, nil
 }
 
 func exists(path string) (bool, error) {

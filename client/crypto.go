@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -42,7 +44,15 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 		switch object.Type {
 		case "text":
 			{
-				ciphertext, nonce, err := encryptSymmetric([]byte(object.Content), symKey)
+				if object.Content == nil {
+					return EncryptedMessage{}, fmt.Errorf("text object content cannot be empty")
+				}
+
+				if object.FilePath != nil {
+					return EncryptedMessage{}, fmt.Errorf("text object cannot have a file path")
+				}
+
+				ciphertext, nonce, err := encryptSymmetric([]byte(*object.Content), symKey)
 				if err != nil {
 					return EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
 				}
@@ -55,6 +65,51 @@ func encrypt(inputMessage InputMessage, config Config) (EncryptedMessage, error)
 				messageObjects = append(messageObjects, EncryptedMessageObject{
 					Type:      object.Type,
 					Content:   base64.StdEncoding.EncodeToString(ciphertext),
+					Verify:    base64.StdEncoding.EncodeToString(nonce),
+					Signature: base64.StdEncoding.EncodeToString(sig),
+				})
+			}
+		case "file":
+			{
+				if object.FilePath == nil {
+					return EncryptedMessage{}, fmt.Errorf("file object path cannot be empty")
+				}
+
+				if object.Content != nil {
+					return EncryptedMessage{}, fmt.Errorf("file object cannot have content")
+				}
+
+				file, err := os.Open(*object.FilePath)
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("failed to open file %s to be encrypted: %w", *object.FilePath, err)
+				}
+				defer file.Close()
+
+				bytes, err := io.ReadAll(file)
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("failed to read file %s to be encrypted: %w", *object.FilePath, err)
+				}
+				encryptedFile, nonce, err := encryptSymmetric(bytes, symKey)
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("error encrypting message: %v", err)
+				}
+
+				sig, err := signMessage(encryptedFile, fmt.Sprintf("%s/signing_private.key", config.Keys.PrivateKeys))
+				if err != nil {
+					return EncryptedMessage{}, fmt.Errorf("error signing message: %v", err)
+				}
+
+				var fileNamePtr *string
+				if object.FilePath != nil {
+					parts := strings.Split(*object.FilePath, "/")
+					fileName := parts[len(parts)-1]
+					fileNamePtr = &fileName
+				}
+
+				messageObjects = append(messageObjects, EncryptedMessageObject{
+					Type:      object.Type,
+					Content:   base64.StdEncoding.EncodeToString(encryptedFile),
+					FileName:  fileNamePtr,
 					Verify:    base64.StdEncoding.EncodeToString(nonce),
 					Signature: base64.StdEncoding.EncodeToString(sig),
 				})
@@ -154,6 +209,13 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 		switch object.Type {
 		case "text":
 			{
+				if object.Content == "" {
+					return DecryptedMessage{}, fmt.Errorf("text object content cannot be empty")
+				}
+				if *object.FileName != "" {
+					return DecryptedMessage{}, fmt.Errorf("text object cannot have a file path")
+				}
+
 				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
 				if err != nil {
 					return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
@@ -183,9 +245,61 @@ func decrypt(msg EncryptedMessage, config Config) (DecryptedMessage, error) {
 					return DecryptedMessage{}, fmt.Errorf("error decrypting message: %v", err)
 				}
 
+				content := string(plaintext)
 				decryptedObject := MessageObject{
 					Type:    object.Type,
-					Content: string(plaintext),
+					Content: &content,
+				}
+
+				decryptedObjects = append(decryptedObjects, decryptedObject)
+			}
+		case "file":
+			{
+				if *object.FileName == "" {
+					return DecryptedMessage{}, fmt.Errorf("file object name cannot be empty")
+				}
+				if object.Content != "" {
+					return DecryptedMessage{}, fmt.Errorf("file object cannot have content")
+				}
+
+				nonce, err := base64.StdEncoding.DecodeString(object.Verify)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding nonce: %v", err)
+				}
+
+				fileBytes, err := base64.StdEncoding.DecodeString(object.Content)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding file: %v", err)
+				}
+
+				sig, err := base64.StdEncoding.DecodeString(object.Signature)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding signature: %v", err)
+				}
+
+				signingPub, err := base64.StdEncoding.DecodeString(msg.SigningPublicKey)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decoding signing public key: %v", err)
+				}
+
+				if !ed25519.Verify(signingPub, fileBytes, sig) {
+					return DecryptedMessage{}, fmt.Errorf("signature verification failed")
+				}
+
+				decryptedFile, err := decryptSymmetric(fileBytes, symKey, nonce)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("error decrypting file: %v", err)
+				}
+
+				outputPath := fmt.Sprintf("%s/%s", config.FileStore, *object.FileName)
+				err = os.WriteFile(outputPath, decryptedFile, 0600)
+				if err != nil {
+					return DecryptedMessage{}, fmt.Errorf("failed to write decrypted file: %w", err)
+				}
+
+				decryptedObject := MessageObject{
+					Type:     object.Type,
+					FilePath: &outputPath,
 				}
 
 				decryptedObjects = append(decryptedObjects, decryptedObject)

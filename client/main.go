@@ -95,7 +95,9 @@ func main() {
 			for _, object := range decryptedMessage.Objects {
 				switch object.Type {
 				case "text":
-					output += fmt.Sprintf("Text: %s\n", object.Content)
+					output += fmt.Sprintf("Text: %s\n", *object.Content)
+				case "file":
+					output += fmt.Sprintf("File: %s\n", *object.FilePath)
 				default:
 					return fmt.Errorf("unsupported message object type: %s", object.Type)
 				}
